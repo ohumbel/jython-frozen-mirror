@@ -4,12 +4,12 @@
  */
 package org.python.indexer.demos;
 
-import org.antlr.runtime.ANTLRStringStream;
-import org.antlr.runtime.BaseRecognizer;
-import org.antlr.runtime.CommonToken;
-import org.antlr.runtime.RecognitionException;
-import org.antlr.runtime.RecognizerSharedState;
-import org.antlr.runtime.Token;
+import org.antlr.v4.runtime.ANTLRStringStream;
+import org.antlr.v4.runtime.BaseRecognizer;
+import org.antlr.v4.runtime.CommonToken;
+import org.antlr.v4.runtime.RecognitionException;
+import org.antlr.v4.runtime.RecognizerSharedState;
+import org.antlr.v4.runtime.Token;
 import org.python.antlr.PythonLexer;
 import org.python.antlr.PythonTree;
 import org.python.antlr.RecordingErrorHandler;

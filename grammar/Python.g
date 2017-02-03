@@ -79,7 +79,7 @@ tokens {
 @header {
 package org.python.antlr;
 
-import org.antlr.runtime.CommonToken;
+import org.antlr.v4.runtime.CommonToken;
 
 import org.python.antlr.ParseException;
 import org.python.antlr.PythonTree;

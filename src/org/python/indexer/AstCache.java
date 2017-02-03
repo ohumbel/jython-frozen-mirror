@@ -16,10 +16,10 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.antlr.runtime.ANTLRFileStream;
-import org.antlr.runtime.ANTLRStringStream;
-import org.antlr.runtime.CharStream;
-import org.antlr.runtime.RecognitionException;
+import org.antlr.v4.runtime.ANTLRFileStream;
+import org.antlr.v4.runtime.ANTLRStringStream;
+import org.antlr.v4.runtime.CharStream;
+import org.antlr.v4.runtime.RecognitionException;
 import org.python.antlr.AnalyzingParser;
 import org.python.antlr.base.mod;
 import org.python.indexer.ast.NModule;

@@ -18,8 +18,8 @@ import java.nio.charset.UnsupportedCharsetException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.antlr.runtime.CharStream;
-import org.antlr.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.CharStream;
+import org.antlr.v4.runtime.CommonTokenStream;
 import org.python.antlr.BaseParser;
 import org.python.antlr.NoCloseReaderStream;
 import org.python.antlr.ParseException;

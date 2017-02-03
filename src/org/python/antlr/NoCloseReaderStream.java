@@ -29,6 +29,7 @@ package org.python.antlr;
 
 import java.io.*;
 
+//TODO:antlr4 replace ANTLRStringStream (see http://stackoverflow.com/questions/18110180/processing-a-string-with-antlr4)
 import org.antlr.runtime.ANTLRStringStream;
 
 //This is the same as ANTLRReaderStream except it does not close the Reader.

@@ -1,8 +1,8 @@
 package org.python.antlr;
 
-import org.antlr.runtime.CommonToken;
-import org.antlr.runtime.Token;
-import org.antlr.runtime.tree.CommonTree;
+import org.antlr.v4.runtime.CommonToken;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.tree.CommonTree;
 
 import org.python.core.PyObject;
 import org.python.core.PyType;
@@ -272,6 +272,7 @@ public class PythonTree extends AST implements Traverseproc {
         throw new RuntimeException("Cannot traverse node: " + this);
     }
  
+    // TODO:antlr4
 //XXX: From here down copied from org.antlr.runtime.tree.BaseTree
     protected List<PythonTree> children;
 

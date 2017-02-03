@@ -3,7 +3,7 @@ package org.python.antlr;
 import org.python.core.Py;
 import org.python.core.PyObject;
 
-import org.antlr.runtime.*;
+import org.antlr.v4.runtime.*;
 
 public class ParseException extends RuntimeException {
 	public transient IntStream input;

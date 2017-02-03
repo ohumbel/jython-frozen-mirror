@@ -30,7 +30,7 @@ import org.python.core.Py;
  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-import org.antlr.runtime.*;
+import org.antlr.v4.runtime.*;
 import java.util.*;
 
 /** Python does not explicitly provide begin and end nesting signals.

@@ -1,9 +1,9 @@
 package org.python.antlr;
 
-import org.antlr.runtime.Token;
-import org.antlr.runtime.TokenStream;
-import org.antlr.runtime.RecognitionException;
-import org.antlr.runtime.tree.CommonErrorNode;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.TokenStream;
+import org.antlr.v4.runtime.RecognitionException;
+import org.antlr.v4.runtime.tree.CommonErrorNode;
 
 /** A node representing erroneous token range in token stream
  */

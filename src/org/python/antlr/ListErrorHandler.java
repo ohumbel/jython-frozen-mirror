@@ -1,10 +1,10 @@
 package org.python.antlr;
 
-import org.antlr.runtime.BaseRecognizer;
-import org.antlr.runtime.BitSet;
-import org.antlr.runtime.IntStream;
-import org.antlr.runtime.Lexer;
-import org.antlr.runtime.RecognitionException;
+import org.antlr.v4.runtime.BaseRecognizer;
+import org.antlr.v4.runtime.BitSet;
+import org.antlr.v4.runtime.IntStream;
+import org.antlr.v4.runtime.Lexer;
+import org.antlr.v4.runtime.RecognitionException;
 import org.python.antlr.ast.ErrorMod;
 import org.python.antlr.ast.ErrorExpr;
 import org.python.antlr.ast.ErrorSlice;
