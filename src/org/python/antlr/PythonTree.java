@@ -2,7 +2,7 @@ package org.python.antlr;
 
 import org.antlr.v4.runtime.CommonToken;
 import org.antlr.v4.runtime.Token;
-import org.antlr.v4.runtime.tree.CommonTree;
+import org.antlr.runtime.tree.CommonTree;
 
 import org.python.core.PyObject;
 import org.python.core.PyType;
