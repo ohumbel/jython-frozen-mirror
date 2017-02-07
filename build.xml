@@ -418,6 +418,7 @@ The readme text for the next release will be like:
                 source="${jdk.source.version}"
                 debug="${debug}"
                 deprecation="${deprecation}"
+                includeantruntime="false"
                 nowarn="${nowarn}">
             <include name="org/python/util/TemplateAntTask.java" />
             <compilerarg line="${javac.Xlint}"/>
@@ -437,8 +438,9 @@ The readme text for the next release will be like:
             <arg path="${work.dir}/build/gensrc/org/python/antlr"/>
             <arg value="-lib"/>
             <arg path="${work.dir}/build/gensrc/org/python/antlr"/>
-            <arg file="${jython.base.dir}/grammar/Python.g4"/>
+            <arg file="${jython.base.dir}/grammar/Python3.g4"/>
             <!-- 
+            <arg file="${jython.base.dir}/grammar/Python.g4"/>
             <arg file="${jython.base.dir}/grammar/PythonPartial.g4"/>
             -->
             <classpath refid="main.classpath"/>
@@ -463,6 +465,7 @@ The readme text for the next release will be like:
                nowarn="${nowarn}"
                memoryMaximumSize="1024m"
                fork="true"
+               includeantruntime="false"
                encoding="UTF-8">
             <compilerarg line="${javac.Xlint}"/>
             <src path="${source.dir}"/>
@@ -479,6 +482,7 @@ The readme text for the next release will be like:
                source="${jdk.source.version}"
                debug="${debug}"
                deprecation="${deprecation}"
+               includeantruntime="false"
                nowarn="${nowarn}">
             <compilerarg line="${javac.Xlint}"/>
         </javac>
@@ -491,6 +495,7 @@ The readme text for the next release will be like:
                debug="${debug}"
                deprecation="${deprecation}"
                nowarn="${nowarn}"
+               includeantruntime="false"
                encoding="UTF-8">
             <compilerarg line="${javac.Xlint}"/>
             <classpath refid="test.classpath" />
@@ -501,6 +506,7 @@ The readme text for the next release will be like:
             source="${jdk.source.version}"
             debug="${debug}"
             deprecation="${deprecation}"
+            includeantruntime="false"
             nowarn="${nowarn}">
             <compilerarg line="${javac.Xlint}"/>
             <classpath refid="test.classpath" />
@@ -862,6 +868,7 @@ The readme text for the next release will be like:
                debug="${debug}"
                deprecation="${deprecation}"
                nowarn="${nowarn}"
+               includeantruntime="false"
         />
         <echo>copy installer classes to ${dist.dir}</echo>
         <copy todir="${dist.dir}" preservelastmodified="true">
