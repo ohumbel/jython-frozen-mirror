@@ -1294,7 +1294,7 @@ test[expr_contextType ctype]
              etype = new IfExp($o1.start, actions.castExpr($o2.tree), actions.castExpr($o1.tree), actions.castExpr($e.tree));
          }
       |
-     -> or_test
+//     -> or_test
       )
     | lambdef
     ;
@@ -1315,7 +1315,7 @@ or_test
         ( (or=OR right+=and_test[ctype]
           )+
         |
-       -> $left
+//       -> $left
         )
     ;
 
@@ -1335,7 +1335,7 @@ and_test
         ( (and=AND right+=not_test[ctype]
           )+
         |
-       -> $left
+//       -> $left
         )
     ;
 
@@ -1380,7 +1380,7 @@ comparison
            }
          )+
        |
-      -> $left
+//      -> $left
        )
     ;
 
@@ -1456,7 +1456,7 @@ scope {
         ( (op=VBAR right+=xor_expr
           )+
         |
-       -> $left
+//       -> $left
         )
     ;
 
@@ -1478,7 +1478,7 @@ xor_expr
         ( (op=CIRCUMFLEX right+=and_expr
           )+
         |
-       -> $left
+//       -> $left
         )
     ;
 
@@ -1499,7 +1499,7 @@ and_expr
         ( (op=AMPER right+=shift_expr
           )+
         |
-       -> $left
+//       -> $left
         )
     ;
 
@@ -1528,7 +1528,7 @@ shift_expr
             }
           )+
         |
-       -> $left
+//       -> $left
         )
     ;
 
@@ -1569,7 +1569,7 @@ arith_expr
            }
           )+
         |
-       -> $left
+//       -> $left
         )
     ;
     // This only happens when Antlr is allowed to do error recovery (for example if ListErrorHandler
@@ -1618,7 +1618,7 @@ term
           }
           )+
         |
-       -> $left
+//       -> $left
         )
     ;
 
@@ -1729,7 +1729,7 @@ atom
             etype = $yield_expr.etype;
         }
       | testlist_gexp
-     -> testlist_gexp
+//     -> testlist_gexp
       |
         {
             etype = new Tuple($LPAREN, new ArrayList<expr>(), $expr::ctype);
@@ -1738,7 +1738,7 @@ atom
       RPAREN
     | LBRACK
       (listmaker[$LBRACK]
-     -> listmaker
+//     -> listmaker
       |
        {
            etype = new org.python.antlr.ast.List($LBRACK, new ArrayList<expr>(), $expr::ctype);
@@ -1747,7 +1747,7 @@ atom
       RBRACK
     | LCURLY
        (dictorsetmaker[$LCURLY]
-      -> dictorsetmaker
+//      -> dictorsetmaker
        |
         {
             etype = new Dict($LCURLY, new ArrayList<expr>(), new ArrayList<expr>());
@@ -1824,7 +1824,7 @@ testlist_gexp
            {
                etype = new Tuple($testlist_gexp.start, actions.castExprs($t), $expr::ctype);
            }
-        | -> test
+//        | -> test
         | (comp_for[gens]
            {
                Collections.reverse(gens);
@@ -1941,7 +1941,7 @@ sliceop
 }
     : COLON
      (test[expr_contextType.Load]
-    -> test
+//    -> test
      |
        {
            etype = new Name($COLON, "None", expr_contextType.Load);
