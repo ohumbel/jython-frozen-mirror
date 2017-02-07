@@ -30,6 +30,11 @@
  */
 grammar Python3;
 
+
+@header {
+package org.python.antlr;
+}
+
 // All comments that start with "///" are copy-pasted from
 // The Python Language Reference: https://docs.python.org/3.3/reference/grammar.html
 
