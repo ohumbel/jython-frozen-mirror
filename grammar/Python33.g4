@@ -28,7 +28,7 @@
  *                https://github.com/bkiers/python3-parser
  * Developed by : Bart Kiers, bart@big-o.nl
  */
-grammar Python3;
+grammar Python33;
 
 
 @header {
@@ -74,7 +74,7 @@ tokens { INDENT, DEDENT }
       }
 
       // First emit an extra line break that serves as the end of the statement.
-      this.emit(commonToken(Python3Parser.NEWLINE, "\n"));
+      this.emit(commonToken(Python33Parser.NEWLINE, "\n"));
 
       // Now emit as much DEDENT tokens as needed.
       while (!indents.isEmpty()) {
@@ -83,7 +83,7 @@ tokens { INDENT, DEDENT }
       }
 
       // Put the EOF back on the token stream.
-      this.emit(commonToken(Python3Parser.EOF, "<EOF>"));
+      this.emit(commonToken(Python33Parser.EOF, "<EOF>"));
     }
 
     Token next = super.nextToken();
@@ -97,7 +97,7 @@ tokens { INDENT, DEDENT }
   }
 
   private Token createDedent() {
-    CommonToken dedent = commonToken(Python3Parser.DEDENT, "");
+    CommonToken dedent = commonToken(Python33Parser.DEDENT, "");
     dedent.setLine(this.lastToken.getLine());
     return dedent;
   }
@@ -738,14 +738,14 @@ BREAK : 'break';
 
 NEWLINE
  : ( {atStartOfInput()}?   SPACES
-   | ( '\r'? '\n' | '\r' ) SPACES?
+   | ( '\r'? '\n' | '\r' | '\f') SPACES?
    )
    {
-     String newLine = getText().replaceAll("[^\r\n]+", "");
-     String spaces = getText().replaceAll("[\r\n]+", "");
+     String newLine = getText().replaceAll("[^\r\n\f]+", "");
+     String spaces = getText().replaceAll("[\r\n\f]+", "");
      int next = _input.LA(1);
 
-     if (opened > 0 || next == '\r' || next == '\n' || next == '#') {
+     if (opened > 0 || next == '\r' || next == '\n' || next == '\f' || next == '#') {
        // If we're inside a list or on a blank line, ignore all indents, 
        // dedents and line breaks.
        skip();
@@ -762,7 +762,7 @@ NEWLINE
        }
        else if (indent > previous) {
          indents.push(indent);
-         emit(commonToken(Python3Parser.INDENT, spaces));
+         emit(commonToken(Python33Parser.INDENT, spaces));
        }
        else {
          // Possibly emit more than 1 DEDENT token.
@@ -888,8 +888,8 @@ UNKNOWN_CHAR
 /// shortstringitem ::=  shortstringchar | stringescapeseq
 /// shortstringchar ::=  <any source character except "\" or newline or the quote>
 fragment SHORT_STRING
- : '\'' ( STRING_ESCAPE_SEQ | ~[\\\r\n'] )* '\''
- | '"' ( STRING_ESCAPE_SEQ | ~[\\\r\n"] )* '"'
+ : '\'' ( STRING_ESCAPE_SEQ | ~[\\\r\n\f'] )* '\''
+ | '"' ( STRING_ESCAPE_SEQ | ~[\\\r\n\f"] )* '"'
  ;
 
 /// longstring      ::=  "'''" longstringitem* "'''" | '"""' longstringitem* '"""'
@@ -1017,11 +1017,11 @@ fragment SPACES
  ;
 
 fragment COMMENT
- : '#' ~[\r\n]*
+ : '#' ~[\r\n\f]*
  ;
 
 fragment LINE_JOINING
- : '\\' SPACES? ( '\r'? '\n' | '\r' )
+ : '\\' SPACES? ( '\r'? '\n' | '\r' | '\f' )
  ;
 
 /// id_start     ::=  <all characters in general categories Lu, Ll, Lt, Lm, Lo, Nl, the underscore, and characters with the Other_ID_Start property>
