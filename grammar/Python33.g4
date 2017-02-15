@@ -738,7 +738,7 @@ BREAK : 'break';
 
 NEWLINE
  : ( {atStartOfInput()}?   SPACES
-   | ( '\r'? '\n' | '\r' | '\f') SPACES?
+   | ( '\r'? '\n' | '\r' | '\f' ) SPACES?
    )
    {
      String newLine = getText().replaceAll("[^\r\n\f]+", "");
