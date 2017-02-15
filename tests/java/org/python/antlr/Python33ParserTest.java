@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.FileVisitResult;
@@ -25,8 +26,8 @@ public class Python33ParserTest {
 	private static final String CPYTHON_ROOT = "/Users/oti/stuff/gitrepo/python/cpython";
 
 	@Test
-	public void testParseSingleFile() {
-		Path file = Paths.get(CPYTHON_ROOT, "Lib/email/__init__.py");
+	public void testParseSingleFile() throws FileNotFoundException {
+		Path file = Paths.get(CPYTHON_ROOT, "Tools/scripts/findnocoding.py");
 		assertTrue(checkParseable(file));
 	}
 
@@ -40,20 +41,6 @@ public class Python33ParserTest {
 			System.out.println(failedFile);
 		}
 		assertEquals(0, failedFiles.size());
-
-		// the following files failed:
-		// /Users/oti/stuff/gitrepo/python/cpython/Lib/test/bad_coding2.py
-		// /Users/oti/stuff/gitrepo/python/cpython/Lib/test/badsyntax_3131.py
-		// /Users/oti/stuff/gitrepo/python/cpython/Lib/test/test_pep3131.py
-		// /Users/oti/stuff/gitrepo/python/cpython/Misc/Vim/syntax_test.py
-		// /Users/oti/stuff/gitrepo/python/cpython/PC/VC6/rmpyc.py
-		// /Users/oti/stuff/gitrepo/python/cpython/PC/VS7.1/build_ssl.py
-		// /Users/oti/stuff/gitrepo/python/cpython/PC/VS7.1/field3.py
-		// /Users/oti/stuff/gitrepo/python/cpython/PC/VS7.1/rmpyc.py
-		// /Users/oti/stuff/gitrepo/python/cpython/Tools/hg/hgtouch.py
-		// /Users/oti/stuff/gitrepo/python/cpython/Tools/msi/msi.py
-		// /Users/oti/stuff/gitrepo/python/cpython/Tools/msi/msilib.py
-		// /Users/oti/stuff/gitrepo/python/cpython/Tools/scripts/findnocoding.py
 	}
 
 	@Test
@@ -69,11 +56,12 @@ public class Python33ParserTest {
 		assertTrue(checkParseable(new ANTLRInputStream(b.toString())));
 	}
 
-	private static boolean checkParseable(Path file) {
+	private static boolean checkParseable(Path file) throws FileNotFoundException {
 		try (InputStream inputStream = Files.newInputStream(file)) {
+			System.out.println(System.out.format("parsing file: %s ", file.toString()));
 			return checkParseable(new ANTLRInputStream(inputStream));
 		} catch (IOException e) {
-			return false;
+			throw new FileNotFoundException(file.toString());
 		}
 	}
 
@@ -99,15 +87,9 @@ public class Python33ParserTest {
 
 		@Override
 		public FileVisitResult visitFile(Path file, BasicFileAttributes attr) throws IOException {
-			if (attr.isRegularFile()) {
-				String fileAsString = file.toString();
-				if (fileAsString.endsWith(".py") && //
-						!fileAsString.contains("/test2to3/") && //
-						!fileAsString.contains("/lib2to3/")) {
-					System.out.println(System.out.format("parsing file: %s ", fileAsString));
-					if (!checkParseable(file)) {
-						failedFiles.add(fileAsString);
-					}
+			if (canParse(file, attr)) {
+				if (!checkParseable(file)) {
+					failedFiles.add(file.toString());
 				}
 			}
 			return FileVisitResult.CONTINUE;
@@ -120,6 +102,49 @@ public class Python33ParserTest {
 
 		public List<String> getFailedFiles() {
 			return failedFiles;
+		}
+
+		private boolean canParse(Path file, BasicFileAttributes attr) {
+			boolean canParse = false;
+			String fileName = file.toString();
+			if (attr.isRegularFile() && fileName.endsWith(".py")) {
+				canParse = true;
+				// and now all the exclusions:
+				if (is_not_a_pure_3_grammar(fileName) || print_is_not_a_function(fileName)
+						|| except_is_not_a_function(fileName) || raise_is_not_a_function(fileName)
+						|| bad_syntax(fileName) || not_sure_whats_wrong(fileName)) {
+					canParse = false;
+				}
+			}
+			return canParse;
+		}
+
+		private boolean is_not_a_pure_3_grammar(String name) {
+			return name.contains("/test2to3/") || name.contains("/lib2to3/");
+		}
+
+		private boolean print_is_not_a_function(String name) {
+			return name.endsWith("/PC/VC6/rmpyc.py") || name.endsWith("/PC/VS7.1/build_ssl.py")
+					|| name.endsWith("/PC/VS7.1/field3.py") || name.endsWith("/PC/VS7.1/rmpyc.py")
+					|| name.endsWith("/Tools/msi/msilib.py");
+		}
+
+		private boolean except_is_not_a_function(String name) {
+			return name.endsWith("/Tools/hg/hgtouch.py");
+		}
+
+		private boolean raise_is_not_a_function(String name) {
+			return name.endsWith("/Tools/msi/msi.py");
+		}
+
+		private boolean bad_syntax(String name) {
+			return name.endsWith("/Lib/test/bad_coding2.py") || name.endsWith("/Lib/test/badsyntax_3131.py")
+					|| name.endsWith("/Lib/test/test_pep3131.py") || name.endsWith("/Misc/Vim/syntax_test.py");
+		}
+
+		private boolean not_sure_whats_wrong(String name) {
+			// a re.compile() statment fails to parse:
+			return name.endsWith("/Tools/scripts/findnocoding.py");
 		}
 	}
 
