@@ -2,7 +2,6 @@ package org.python.antlr;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -28,7 +27,7 @@ public class Python33ParserTest {
 	@Test
 	public void testParseSingleFile() throws FileNotFoundException {
 		Path file = Paths.get(CPYTHON_ROOT, "Tools/scripts/findnocoding.py");
-		assertTrue(checkParseable(file));
+		assertParseable(file);
 	}
 
 	@Test
@@ -52,34 +51,28 @@ public class Python33ParserTest {
 		b.append("    if unk:\n");
 		b.append("        print('%s %s unknown bits %x' % (name, name, unk))\n");
 		b.append("    size = type & datasizemask\n");
-
-		assertTrue(checkParseable(new ANTLRInputStream(b.toString())));
+		assertParseable(new ANTLRInputStream(b.toString()));
 	}
 
-	private static boolean checkParseable(Path file) throws FileNotFoundException {
+	private static void assertParseable(Path file) throws FileNotFoundException {
 		try (InputStream inputStream = Files.newInputStream(file)) {
-			System.out.println(System.out.format("parsing file: %s ", file.toString()));
-			return checkParseable(new ANTLRInputStream(inputStream));
+			System.out.println(System.out.format("parsing file: %s ", file));
+			assertParseable(new ANTLRInputStream(inputStream));
 		} catch (IOException e) {
 			throw new FileNotFoundException(file.toString());
 		}
+
 	}
 
-	private static boolean checkParseable(ANTLRInputStream input) {
-		boolean parseable = true;
-		try {
-			Python33Lexer lexer = new Python33Lexer(input);
-			DescriptiveBailErrorListener errorListener = new DescriptiveBailErrorListener();
-			lexer.addErrorListener(errorListener);
-			CommonTokenStream tokens = new CommonTokenStream(lexer);
-			Python33Parser parser = new Python33Parser(tokens);
-			parser.addErrorListener(errorListener);
-			ParseTree tree = parser.file_input();
-			assertNotNull(tree);
-		} catch (Exception e) {
-			parseable = false;
-		}
-		return parseable;
+	private static void assertParseable(ANTLRInputStream input) {
+		Python33Lexer lexer = new Python33Lexer(input);
+		DescriptiveBailErrorListener errorListener = new DescriptiveBailErrorListener();
+		lexer.addErrorListener(errorListener);
+		CommonTokenStream tokens = new CommonTokenStream(lexer);
+		Python33Parser parser = new Python33Parser(tokens);
+		parser.addErrorListener(errorListener);
+		ParseTree tree = parser.file_input();
+		assertNotNull(tree);
 	}
 
 	private static final class ParseFiles extends SimpleFileVisitor<Path> {
@@ -88,7 +81,9 @@ public class Python33ParserTest {
 		@Override
 		public FileVisitResult visitFile(Path file, BasicFileAttributes attr) throws IOException {
 			if (canParse(file, attr)) {
-				if (!checkParseable(file)) {
+				try {
+					assertParseable(file);
+				} catch (Exception e) {
 					failedFiles.add(file.toString());
 				}
 			}
