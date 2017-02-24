@@ -438,7 +438,7 @@ The readme text for the next release will be like:
             <arg path="${work.dir}/build/gensrc/org/python/antlr"/>
             <arg value="-lib"/>
             <arg path="${work.dir}/build/gensrc/org/python/antlr"/>
-            <arg file="${jython.base.dir}/grammar/Python33.g4"/>
+            <arg file="${jython.base.dir}/grammar/Python27.g4"/>
             <!-- 
             <arg file="${jython.base.dir}/grammar/Python.g4"/>
             <arg file="${jython.base.dir}/grammar/PythonPartial.g4"/>
