@@ -1,7 +1,6 @@
 package org.python.antlr;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -13,7 +12,10 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
+import java.util.Set;
 
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -23,35 +25,63 @@ import org.junit.Test;
 public class Python27ParserTest {
 
 	private static final String CPYTHON_ROOT = "/Users/oti/stuff/gitrepo/python/cpython";
+	private static final String JYTHON_ROOT = "/Users/oti/stuff/gitrepo/ohumbel/jython";
 
 	@Test
 	public void testParseSingleFile() throws FileNotFoundException {
-		Path file = Paths.get(CPYTHON_ROOT, "Tools/scripts/findnocoding.py");
+		Path file = Paths.get(CPYTHON_ROOT, "Demo/curses/life.py");
 		assertParseable(file);
 	}
 
 	@Test
 	public void testParseWholePython27Library() throws IOException {
-		Path startingDir = Paths.get(CPYTHON_ROOT);
-		ParseFiles pf = new ParseFiles();
-		Files.walkFileTree(startingDir, pf);
-		List<String> failedFiles = pf.getFailedFiles();
-		for (String failedFile : failedFiles) {
-			System.out.println(failedFile);
-		}
-		assertEquals(0, failedFiles.size());
+		parseDirectory(CPYTHON_ROOT, loadExpectedFailures());
+	}
+
+	@Test
+	public void testParseWholeJython27Library() throws IOException {
+		parseDirectory(JYTHON_ROOT, loadExpectedFailures());
 	}
 
 	@Test
 	public void testParseSimpleInput() {
 		StringBuilder b = new StringBuilder();
-		b.append("for index, name, type in fields:\n");
-		b.append("    index -= 1\n");
-		b.append("    unk = type & ~knownbits\n");
-		b.append("    if unk:\n");
-		b.append("        print('%s %s unknown bits %x' % (name, name, unk))\n");
-		b.append("    size = type & datasizemask\n");
+		b.append("if os.system('nmake /nologo /c /f msisupport.mak') != 0:");
+		b.append("  raise RuntimeError(\"'nmake /f msisupport.mak' failed\")\n");
+		b.append("if msilib.pe_type(dll_path) != msilib.pe_type('msisupport.dll'):\n");
+		b.append("  raise SystemError, 'msisupport.dll for incorrect architecture'\n");
 		assertParseable(new ANTLRInputStream(b.toString()));
+	}
+
+	private static Set<String> loadExpectedFailures() throws IOException {
+		Properties properties = new Properties();
+		Path maxFailures = Paths.get(JYTHON_ROOT, "grammar/CPython27.max.failing.files.properties");
+		try (InputStream inputStream = Files.newInputStream(maxFailures)) {
+			properties.load(inputStream);
+		}
+		Set<String> expecedFailures = new HashSet<>();
+		for (Object key : properties.keySet()) {
+			assertTrue(key instanceof String);
+			expecedFailures.add((String) key);
+		}
+		return expecedFailures;
+	}
+
+	private static void parseDirectory(String root, Set<String> expectedFailures) throws IOException {
+		Path directory = Paths.get(root);
+		ParseFiles pf = new ParseFiles();
+		Files.walkFileTree(directory, pf);
+		List<String> failedFiles = pf.getFailedFiles();
+		for (String failedFile : failedFiles) {
+			System.out.println(failedFile);
+			String shortFailedFile = failedFile.replace(root + "/", "");
+			assertTrue("unexpected failing: " + shortFailedFile, expectedFailures.contains(shortFailedFile));
+		}
+		int numberOfFailedFiles = failedFiles.size();
+		int expectedNumberOfFailedFiles = expectedFailures.size();
+		assertTrue("too much failing files: " + numberOfFailedFiles + " instead of " + expectedNumberOfFailedFiles,
+				numberOfFailedFiles <= expectedNumberOfFailedFiles);
+		assertEquals("acutally failing (max="+expectedNumberOfFailedFiles+")", 0, numberOfFailedFiles);
 	}
 
 	private static void assertParseable(Path file) throws FileNotFoundException {
@@ -106,8 +136,8 @@ public class Python27ParserTest {
 				canParse = true;
 				// and now all the exclusions:
 				if (is_not_a_pure_3_grammar(fileName) || print_is_not_a_function(fileName)
-						|| except_is_not_a_function(fileName) || raise_is_not_a_function(fileName)
-						|| bad_syntax(fileName) || not_sure_whats_wrong(fileName)) {
+						|| except_is_not_a_function(fileName) || bad_syntax(fileName)
+						|| not_sure_whats_wrong(fileName)) {
 					canParse = false;
 				}
 			}
@@ -121,20 +151,15 @@ public class Python27ParserTest {
 		private boolean print_is_not_a_function(String name) {
 			return name.endsWith("/PC/VC6/rmpyc.py") || name.endsWith("/PC/VS7.1/build_ssl.py")
 					|| name.endsWith("/PC/VS7.1/field3.py") || name.endsWith("/PC/VS7.1/rmpyc.py")
-					|| name.endsWith("/Tools/msi/msilib.py");
+					|| name.endsWith("/Tools/msi/msilib.py"); // also raise
 		}
 
 		private boolean except_is_not_a_function(String name) {
 			return name.endsWith("/Tools/hg/hgtouch.py");
 		}
 
-		private boolean raise_is_not_a_function(String name) {
-			return name.endsWith("/Tools/msi/msi.py");
-		}
-
 		private boolean bad_syntax(String name) {
-			return name.endsWith("/Lib/test/bad_coding2.py") || name.endsWith("/Lib/test/badsyntax_3131.py")
-					|| name.endsWith("/Lib/test/test_pep3131.py") || name.endsWith("/Misc/Vim/syntax_test.py");
+			return name.endsWith("/Lib/test/bad_coding2.py") || name.endsWith("/Misc/Vim/syntax_test.py");
 		}
 
 		private boolean not_sure_whats_wrong(String name) {

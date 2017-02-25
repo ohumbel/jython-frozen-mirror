@@ -313,9 +313,9 @@ yield_stmt
  : yield_expr
  ;
 
-/// raise_stmt: 'raise' [test ['from' test]]
+/// raise_stmt: 'raise' [test [',' test [',' test]]]
 raise_stmt
- : RAISE ( test ( FROM test )? )?
+ : RAISE ( test ( ',' test ( ',' test )? )? )?
  ;
 
 /// import_stmt: import_name | import_from
