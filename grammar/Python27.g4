@@ -433,9 +433,9 @@ with_item
  ;
 
 /// # NB compile.c makes sure that the default except clause is last
-/// except_clause: 'except' [test ['as' NAME]]
+/// except_clause: 'except' [test [('as' | ',') test]]
 except_clause
- : EXCEPT ( test ( AS NAME )? )?
+ : EXCEPT ( test ( ( AS | ',' ) test )? )?
  ;
 
 /// suite: simple_stmt | NEWLINE INDENT stmt+ DEDENT

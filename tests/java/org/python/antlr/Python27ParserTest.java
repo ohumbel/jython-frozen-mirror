@@ -29,7 +29,7 @@ public class Python27ParserTest {
 
 	@Test
 	public void testParseSingleFile() throws FileNotFoundException {
-		Path file = Paths.get(CPYTHON_ROOT, "Demo/curses/life.py");
+		Path file = Paths.get(CPYTHON_ROOT, "Tools/msi/msi.py");
 		assertParseable(file);
 	}
 
@@ -81,7 +81,7 @@ public class Python27ParserTest {
 		int expectedNumberOfFailedFiles = expectedFailures.size();
 		assertTrue("too much failing files: " + numberOfFailedFiles + " instead of " + expectedNumberOfFailedFiles,
 				numberOfFailedFiles <= expectedNumberOfFailedFiles);
-		assertEquals("acutally failing (max="+expectedNumberOfFailedFiles+")", 0, numberOfFailedFiles);
+		assertEquals("acutally failing (max=" + expectedNumberOfFailedFiles + ")", 0, numberOfFailedFiles);
 	}
 
 	private static void assertParseable(Path file) throws FileNotFoundException {
@@ -135,8 +135,7 @@ public class Python27ParserTest {
 			if (attr.isRegularFile() && fileName.endsWith(".py")) {
 				canParse = true;
 				// and now all the exclusions:
-				if (is_not_a_pure_3_grammar(fileName) || print_is_not_a_function(fileName)
-						|| except_is_not_a_function(fileName) || bad_syntax(fileName)
+				if (is_not_a_pure_3_grammar(fileName) || print_is_not_a_function(fileName) || bad_syntax(fileName)
 						|| not_sure_whats_wrong(fileName)) {
 					canParse = false;
 				}
@@ -151,11 +150,7 @@ public class Python27ParserTest {
 		private boolean print_is_not_a_function(String name) {
 			return name.endsWith("/PC/VC6/rmpyc.py") || name.endsWith("/PC/VS7.1/build_ssl.py")
 					|| name.endsWith("/PC/VS7.1/field3.py") || name.endsWith("/PC/VS7.1/rmpyc.py")
-					|| name.endsWith("/Tools/msi/msilib.py"); // also raise
-		}
-
-		private boolean except_is_not_a_function(String name) {
-			return name.endsWith("/Tools/hg/hgtouch.py");
+					|| name.endsWith("/Tools/msi/msilib.py");
 		}
 
 		private boolean bad_syntax(String name) {
