@@ -37,3 +37,6 @@ cachedir
 dist
 target
 profile.txt
+
+# non distributable external libraries
+/extlibs/non-distributable
