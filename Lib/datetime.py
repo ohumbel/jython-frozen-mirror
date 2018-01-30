@@ -43,6 +43,9 @@ if _sys.platform.startswith('java'):
         cal.clear()
         return cal
 
+    def _make_java_default_calendar():
+        return GregorianCalendar(0, 0, 0, 0, 0, 0)
+
     def _make_java_calendar(d):
         tzinfo = d.tzinfo
         if tzinfo == None:
@@ -1073,11 +1076,13 @@ class date(object):
         def __tojava__(self, java_class):
             if java_class not in (Calendar, Date, Object):
                 return Py.NoConversion
-            calendar = _make_java_utc_calendar()
-            calendar.set(self.year, self.month - 1, self.day)
             if java_class == Calendar:
+                calendar = _make_java_utc_calendar()
+                calendar.set(self.year, self.month - 1, self.day)
                 return calendar
             else:
+                calendar = _make_java_default_calendar()
+                calendar.set(self.year, self.month - 1, self.day)
                 return Date(calendar.getTimeInMillis())
 
 
@@ -1493,8 +1498,16 @@ class time(object):
             calendar = _make_java_calendar(self)
             if calendar == Py.NoConversion:
                 return Py.NoConversion
-            epoch_ms = (self.hour * 3600 + self.minute * 60 + self.second) * 1000 + self.microsecond // 1000
-            calendar.setTimeInMillis(epoch_ms)
+
+            #initialize to epoch time - effectively clear out the current date from the calendar.
+            calendar.setTimeInMillis(0);
+
+            #now setup the calendar to have the details populated from this time.
+            calendar.set(Calendar.HOUR_OF_DAY, self.hour)
+            calendar.set(Calendar.MINUTE, self.minute)
+            calendar.set(Calendar.SECOND, self.second)
+            calendar.set(Calendar.MILLISECOND, self.microsecond // 1000)
+
             if java_class == Calendar:
                 return calendar
             else:

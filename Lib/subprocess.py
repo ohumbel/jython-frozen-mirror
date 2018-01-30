@@ -438,6 +438,7 @@ elif jython:
     import java.nio.ByteBuffer
     import org.python.core.io.RawIOBase
     import org.python.core.io.StreamIO
+    from org.python.core.Py import fileSystemDecode
 else:
     import select
     _has_poll = hasattr(select, 'poll')
@@ -488,6 +489,38 @@ def _eintr_retry_call(func, *args):
             if e.errno == errno.EINTR:
                 continue
             raise
+
+
+# XXX This function is only used by multiprocessing and the test suite,
+# but it's here so that it can be imported when Python is compiled without
+# threads.
+
+def _args_from_interpreter_flags():
+    """Return a list of command-line arguments reproducing the current
+    settings in sys.flags and sys.warnoptions."""
+    flag_opt_map = {
+        'debug': 'd',
+        # 'inspect': 'i',
+        # 'interactive': 'i',
+        'optimize': 'O',
+        'dont_write_bytecode': 'B',
+        'no_user_site': 's',
+        'no_site': 'S',
+        'ignore_environment': 'E',
+        'verbose': 'v',
+        'bytes_warning': 'b',
+        'py3k_warning': '3',
+    }
+    args = []
+    for flag, opt in flag_opt_map.items():
+        v = getattr(sys.flags, flag)
+        if v > 0:
+            args.append('-' + opt * v)
+    if getattr(sys.flags, 'hash_randomization') != 0:
+        args.append('-R')
+    for opt in sys.warnoptions:
+        args.append('-W' + opt)
+    return args
 
 
 def call(*popenargs, **kwargs):
@@ -779,7 +812,7 @@ if jython:
         maintain those byte values (which may be butchered as
         Strings) for the subprocess if they haven't been modified.
         """
-        # Determine what's safe to merge
+        # Determine what's necessary to merge (new or different)
         merge_env = dict((key, value) for key, value in env.iteritems()
                          if key not in builder_env or
                          builder_env.get(key) != value)
@@ -789,8 +822,10 @@ if jython:
         for entry in entries:
             if entry.getKey() not in env:
                 entries.remove()
-
-        builder_env.putAll(merge_env)
+        # add anything new or different in env
+        for key, value in merge_env.iteritems():
+            # If the new value is bytes, assume it to be FS-encoded
+            builder_env.put(key, fileSystemDecode(value))
 
 
 class Popen(object):
@@ -1308,9 +1343,6 @@ class Popen(object):
                 args = _cmdline2listimpl(args)
             else:
                 args = list(args)
-                # NOTE: CPython posix (execv) will str() any unicode
-                # args first, maybe we should do the same on
-                # posix. Windows passes unicode through, however
                 if any(not isinstance(arg, (str, unicode)) for arg in args):
                     raise TypeError('args must contain only strings')
             args = _escape_args(args)
@@ -1321,6 +1353,11 @@ class Popen(object):
             if executable is not None:
                 args[0] = executable
 
+            # NOTE: CPython posix (execv) will FS-encode any unicode args, but
+            # pass on bytes unchanged, because that's what the system expects.
+            # Java expects unicode, so we do the converse: leave unicode
+            # unchanged but FS-decode any supplied as bytes.
+            args = [fileSystemDecode(arg) for arg in args]
             builder = java.lang.ProcessBuilder(args)
 
             if stdin is None:
@@ -1330,16 +1367,20 @@ class Popen(object):
             if stderr is None:
                 builder.redirectError(java.lang.ProcessBuilder.Redirect.INHERIT)
 
-            # os.environ may be inherited for compatibility with CPython
+            # os.environ may be inherited for compatibility with CPython.
+            # Elements taken from os.environ are FS-decoded to unicode.
             _setup_env(dict(os.environ if env is None else env),
                        builder.environment())
 
+            # The current working directory must also be unicode.
             if cwd is None:
-                cwd = os.getcwd()
-            elif not os.path.exists(cwd):
-                raise OSError(errno.ENOENT, os.strerror(errno.ENOENT), cwd)
-            elif not os.path.isdir(cwd):
-                raise OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), cwd)
+                cwd = os.getcwdu()
+            else:
+                cwd = fileSystemDecode(cwd)
+                if not os.path.exists(cwd):
+                    raise OSError(errno.ENOENT, os.strerror(errno.ENOENT), cwd)
+                elif not os.path.isdir(cwd):
+                    raise OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), cwd)
             builder.directory(java.io.File(cwd))
 
             # Let Java manage redirection of stderr to stdout (it's more
@@ -1890,9 +1931,10 @@ def _os_system(command):
     args = _cmdline2listimpl(command)
     args = _escape_args(args)
     args = _shell_command + args
-    cwd = os.getcwd()
+    cwd = os.getcwdu()
 
-
+    # Python supplies FS-encoded arguments while Java expects String
+    args = [fileSystemDecode(arg) for arg in args]
 
     builder = java.lang.ProcessBuilder(args)
     builder.directory(java.io.File(cwd))

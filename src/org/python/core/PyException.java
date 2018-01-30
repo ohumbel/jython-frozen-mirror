@@ -62,21 +62,37 @@ public class PyException extends RuntimeException implements Traverseproc
     }
 
     private boolean printingStackTrace = false;
+    @Override
     public void printStackTrace() {
         Py.printException(this);
     }
 
+    @Override
     public Throwable fillInStackTrace() {
         return Options.includeJavaStackInExceptions ? super.fillInStackTrace() : this;
     }
 
+    @Override
+    public String getMessage() {
+        normalize();
+        return Py.formatException(type, value);
+    }
+
+    @Override
     public synchronized void printStackTrace(PrintStream s) {
         if (printingStackTrace) {
             super.printStackTrace(s);
         } else {
             try {
+                /*
+                 * Ensure that non-ascii characters are made printable. IOne would prefer to emit
+                 * Unicode, but the output stream too often only accepts bytes. (s is not
+                 * necessarily a console, e.g. during a doctest.)
+                 */
+                PyFile err = new PyFile(s);
+                err.setEncoding("ascii", "backslashreplace");
                 printingStackTrace = true;
-                Py.displayException(type, value, traceback, new PyFile(s));
+                Py.displayException(type, value, traceback, err);
             } finally {
                 printingStackTrace = false;
             }
@@ -92,12 +108,9 @@ public class PyException extends RuntimeException implements Traverseproc
         }
     }
 
+    @Override
     public synchronized String toString() {
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        if (!printingStackTrace) {
-            printStackTrace(new PrintStream(buf));
-        }
-        return buf.toString();
+        return Py.exceptionToString(type, value, traceback);
     }
 
     /**
@@ -332,10 +345,11 @@ public class PyException extends RuntimeException implements Traverseproc
     public static String exceptionClassName(PyObject obj) {
         return obj instanceof PyClass ? ((PyClass)obj).__name__ : ((PyType)obj).fastGetName();
     }
-    
-    
+
+
     /* Traverseproc support */
 
+    @Override
     public int traverse(Visitproc visit, Object arg) {
         int retValue;
         if (type != null) {
@@ -357,6 +371,7 @@ public class PyException extends RuntimeException implements Traverseproc
         return 0;
     }
 
+    @Override
     public boolean refersDirectlyTo(PyObject ob) {
     	return ob != null && (type == ob || value == ob || traceback == ob);
     }

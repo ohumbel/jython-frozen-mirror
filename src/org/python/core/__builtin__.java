@@ -85,7 +85,7 @@ class BuiltinFunctions extends PyBuiltinFunctionSet {
             case 18:
                 return __builtin__.eval(arg1);
             case 19:
-                __builtin__.execfile(arg1.asString());
+                __builtin__.execfile(Py.fileSystemDecode(arg1));
                 return Py.None;
             case 23:
                 return __builtin__.hex(arg1);
@@ -141,7 +141,7 @@ class BuiltinFunctions extends PyBuiltinFunctionSet {
             case 18:
                 return __builtin__.eval(arg1, arg2);
             case 19:
-                __builtin__.execfile(arg1.asString(), arg2);
+                __builtin__.execfile(Py.fileSystemDecode(arg1), arg2);
                 return Py.None;
             case 20:
                 return __builtin__.filter(arg1, arg2);
@@ -191,7 +191,7 @@ class BuiltinFunctions extends PyBuiltinFunctionSet {
             case 18:
                 return __builtin__.eval(arg1, arg2, arg3);
             case 19:
-                __builtin__.execfile(arg1.asString(), arg2, arg3);
+                __builtin__.execfile(Py.fileSystemDecode(arg1), arg2, arg3);
                 return Py.None;
             case 21:
                 return __builtin__.getattr(arg1, arg2, arg3);
@@ -1267,17 +1267,22 @@ class ImportFunction extends PyBuiltinFunction {
               "is the number of parent directories to search relative to the current module.");
     }
 
+    private static final String[] ARGS = {"name", "globals", "locals", "fromlist", "level"};
+
     @Override
     public PyObject __call__(PyObject args[], String keywords[]) {
-        ArgParser ap = new ArgParser("__import__", args, keywords,
-                                     new String[] {"name", "globals", "locals", "fromlist",
-                                                   "level"},
-                                     1);
-        String module = ap.getString(0);
+        ArgParser ap = new ArgParser("__import__", args, keywords, ARGS, 1);
+        PyObject module = ap.getPyObject(0);
+        String name;
+        if (module instanceof PyUnicode) {
+            name = ((PyUnicode) module).encode("ascii").toString();
+        } else {
+            name = ap.getString(0);
+        }
         PyObject globals = ap.getPyObject(1, null);
         PyObject fromlist = ap.getPyObject(3, Py.EmptyTuple);
         int level = ap.getInt(4, imp.DEFAULT_LEVEL);
-        return imp.importName(module.intern(), fromlist == Py.None || fromlist.__len__() == 0,
+        return imp.importName(name.intern(), fromlist == Py.None || fromlist.__len__() == 0,
                               globals, fromlist, level);
     }
 }
@@ -1629,7 +1634,7 @@ class CompileFunction extends PyBuiltinFunction {
                                                    "dont_inherit"},
                                      3);
         PyObject source = ap.getPyObject(0);
-        String filename = ap.getString(1);
+        String filename = Py.fileSystemDecode(ap.getPyObject(1));
         String mode = ap.getString(2);
         int flags = ap.getInt(3, 0);
         boolean dont_inherit = ap.getPyObject(4, Py.False).__nonzero__();
