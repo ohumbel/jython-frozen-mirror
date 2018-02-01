@@ -15,9 +15,7 @@
 .idea/*
 
 # Eclipse files
-.classpath
 .externalToolBuilders/*
-.project
 .pydevproject
 
 # Netbeans files
