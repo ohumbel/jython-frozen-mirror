@@ -1,3 +1,23 @@
+The purpose of this branch (JDK9) is to enable a smooth startup on Java 9 and beyond.
+
+See also: http://bugs.jython.org/issue2582
+
+
+There are at least two jnr-posix issues, one of them can be found here 
+https://github.com/jnr/jnr-posix/issues/110
+
+JRuby as well is struggling with those: 
+https://github.com/jruby/jruby/issues/4834
+
+And - finally - there is our very own PySystemState console encoding hack:
+WARNING: Illegal reflective access by org.python.core.PySystemState (file:/.../jython-standalone.jar) to method java.io.Console.encoding()
+
+
+
+
+    --------------------
+
+
 Jython: Python for the Java Platform
 
 Welcome to Jython 2.7.2a1.
