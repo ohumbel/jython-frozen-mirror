@@ -920,9 +920,10 @@ public class PySystemState extends PyObject implements AutoCloseable,
     private static String getConsoleEncoding() {
         String encoding = null;
         try {
-            Method encodingMethod = java.io.Console.class.getDeclaredMethod("encoding");
+            Class<java.io.Console> consoleClass = java.io.Console.class;
+			Method encodingMethod = consoleClass.getDeclaredMethod("encoding");
             encodingMethod.setAccessible(true); // private static method
-            encoding = (String)encodingMethod.invoke(Console.class);
+            encoding = (String)encodingMethod.invoke(consoleClass);
         } catch (Exception e) {
             // ignore any exception
         }
