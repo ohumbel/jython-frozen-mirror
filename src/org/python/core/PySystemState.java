@@ -43,6 +43,7 @@ import org.python.core.packagecache.SysPackageManager;
 import org.python.expose.ExposedGet;
 import org.python.expose.ExposedType;
 import org.python.modules.Setup;
+import org.python.util.ConsoleEncoding;
 import org.python.util.Generic;
 
 /**
@@ -901,33 +902,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
      * @return the encoding of the underlying platform
      */
     private static String getPlatformEncoding() {
-        // first try to grab the Console encoding
-        String encoding = getConsoleEncoding();
-        if (encoding == null) {
-            try {
-                // Not quite the console encoding (differs on Windows)
-                encoding = System.getProperty("file.encoding");
-            } catch (SecurityException se) {
-                // ignore, can't do anything about it
-            }
-        }
-        return encoding;
-    }
-
-    /**
-     * @return the console encoding; can be <code>null</code>
-     */
-    private static String getConsoleEncoding() {
-        String encoding = null;
-        try {
-            Class<java.io.Console> consoleClass = java.io.Console.class;
-			Method encodingMethod = consoleClass.getDeclaredMethod("encoding");
-            encodingMethod.setAccessible(true); // private static method
-            encoding = (String)encodingMethod.invoke(consoleClass);
-        } catch (Exception e) {
-            // ignore any exception
-        }
-        return encoding;
+        return ConsoleEncoding.get();
     }
 
     /**
