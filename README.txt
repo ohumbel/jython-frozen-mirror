@@ -9,11 +9,54 @@ https://github.com/jnr/jnr-posix/issues/110
 JRuby as well is struggling with those: 
 https://github.com/jruby/jruby/issues/4834
 
-And - finally - there is our very own PySystemState console encoding hack:
+And there is our very own PySystemState console encoding hack:
 WARNING: Illegal reflective access by org.python.core.PySystemState (file:/.../jython-standalone.jar) to method java.io.Console.encoding()
 
+I wrote a little test program to find out the settings on my main platforms.
+Here are the results:
+
+OS                               | JDK       | encoding() | defaultCharset() | file.encoding
+---------------------------------|-----------|------------|------------------|--------------
+macOS HighSierra 10.13.3 (17D47) | 1.7.0_79  | null       | UTF-8            | UTF-8
+macOS HighSierra 10.13.3 (17D47) | 1.8.0_162 | null       | UTF-8            | UTF-8
+macOS HighSierra 10.13.3 (17D47) | 9.0.4     | null       | UTF-8            | UTF-8
+                                 |           |            |                  |
+Ubuntu 17.10 (4.13.0-31-generic) | 1.7.0_79  | null       | UTF-8            | UTF-8
+Ubuntu 17.10 (4.13.0-31-generic) | 1.8.0_162 | null       | UTF-8            | UTF-8
+Ubuntu 17.10 (4.13.0-31-generic) | 9.0.4     | null       | UTF-8            | UTF-8
+                                 |           |            |                  |
+Windows 10 Home (en_US)          | 1.7.0_79  | cp437      | windows-1252     | Cp1252
+Windows 10 Home (en_US)          | 1.8.0_162 | cp437      | windows-1252     | Cp1252
+Windows 10 Home (en_US)          | 9.0.4     | cp437      | windows-1252     | Cp1252
+                                 |           |            |                  |
+Windows 8.1 Pro (de_CH)          | 9.0.4     | cp850      | windows-1252     | Cp1252
+                                 |           |            |                  |
+Windows 8.1 Enterprise (en_UK)   | 1.8.0_162 | cp850      | windows-1252     | Cp1252
+Windows 8.1 Enterprise (en_UK)   | 9.0.4     | cp850      | windows-1252     | Cp1252
+                                 |           |            |                  |
+Fedora 27                        | 1.8.0_161 | null       | UTF-8            | UTF-8
+                                 |           |            |                  |
+CentOS 7                         | 1.8.0_131 | null       | UTF-8            | UTF-8
+                                 |           |            |                  |
+OpenSUSE Leap 42.3               | 1.8.0_144 | null       | UTF-8            | UTF-8
+                                 |           |            |                  |
+SunOS openindiana 5.11 illumos   | 1.8.0_152 | null       | UTF-8            | UTF-8
 
 
+"cmd /c chcp" reveals the actual console encoding on Windows
+
+
+
+jdeps --jdk-internals should not list out scary stuff.
+At the moment there are:
+ - split package: org.w3c.dom.html
+   The interface org.w3c.dom.html.HTMLDOMImplementation is part of the JDK since Java 7,
+   therefore it can be safely removed from our version of xercesImpl.jar
+   See also: https://issues.apache.org/jira/browse/XERCESJ-1689
+ - netty handler uses sun.security.* classes (see https://github.com/netty/netty/issues/6679)
+ - usages of sun.misc.Unsafe, sun.misc.Signal, sun.misc.SignalHandler (should have replacements according to http://openjdk.java.net/jeps/260)
+   (see also: https://wiki.openjdk.java.net/display/JDK8/Java+Dependency+Analysis+Tool)
+   
 
     --------------------
 
