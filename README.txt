@@ -11,6 +11,7 @@ https://github.com/jruby/jruby/issues/4834
 
 And there is our very own PySystemState console encoding hack:
 WARNING: Illegal reflective access by org.python.core.PySystemState (file:/.../jython-standalone.jar) to method java.io.Console.encoding()
+This is being tracked in http://bugs.jython.org/issue2659
 
 I wrote a little test program to find out the settings on my main platforms.
 Here are the results:
