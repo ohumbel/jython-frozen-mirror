@@ -145,7 +145,7 @@ oracle.jar=C:/workspace/HEAD/for_development/bisdevsrv28/jboss/server/infra/lib/
             <pathelement path="${extlibs.dir}/mysql-connector-java-5.1.6.jar" />
             <pathelement path="${extlibs.dir}/postgresql-8.3-603.jdbc4.jar" />
             <!-- pin to Antlr 4 -->
-            <pathelement path="${extlibs.dir}/antlr-4.6-complete.jar" />
+            <pathelement path="${extlibs.dir}/antlr-4.7.1-complete.jar" />
             <pathelement path="${extlibs.dir}/commons-compress-1.12.jar"/>
             <!-- pin to ASM 5.0.3 until we upgrade compilation -->
             <pathelement path="${extlibs.dir}/asm-5.0.4.jar" />
@@ -562,7 +562,7 @@ The readme text for the next release will be like:
         <jarjar destfile="${dist.dir}/${jython.deploy.jar}">
             <zipfileset src="${dist.dir}/${jython.dev.jar}"/>
             <!-- pin to Antlr 4 (notice the .v4. in the package names) -->
-            <zipfileset src="extlibs/antlr-runtime-4.6.jar"/>
+            <zipfileset src="extlibs/antlr-runtime-4.7.1.jar"/>
             <rule pattern="org.antlr.v4.runtime.**" result="org.python.antlr.v4.runtime.@1"/>
             <!-- pin to ASM 5.0.3 until we upgrade compilation -->
             <zipfileset src="extlibs/asm-5.0.4.jar"/>

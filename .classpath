@@ -23,6 +23,6 @@
 	<classpathentry kind="lib" path="extlibs/non-distributable/ojdbc14.jar"/>
 	<classpathentry kind="lib" path="extlibs/mockrunner-0.4.1/lib/jdk1.5/j2ee1.3/mockrunner-servlet.jar"/>
 	<classpathentry kind="lib" path="extlibs/mockrunner-0.4.1/jar/jdom.jar"/>
-	<classpathentry kind="lib" path="extlibs/antlr-4.6-complete.jar"/>
+	<classpathentry kind="lib" path="extlibs/antlr-4.7.1-complete.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
