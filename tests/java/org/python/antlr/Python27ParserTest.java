@@ -20,12 +20,13 @@ import java.util.Set;
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class Python27ParserTest {
 
 	private static final String CPYTHON_ROOT = "/Users/oti/stuff/gitrepo/python/cpython";
-	private static final String JYTHON_ROOT = "/Users/oti/stuff/gitrepo/ohumbel/jython";
+	private static final String JYTHON_ROOT = "/Users/oti/stuff/gitrepo/ohumbel/jythontools/jython";
 
 	@Test
 	public void testParseSingleFile() throws FileNotFoundException {
@@ -34,11 +35,13 @@ public class Python27ParserTest {
 	}
 
 	@Test
+	@Ignore
 	public void testParseWholePython27Library() throws IOException {
 		parseDirectory(CPYTHON_ROOT, loadExpectedFailures());
 	}
 
 	@Test
+	@Ignore
 	public void testParseWholeJython27Library() throws IOException {
 		parseDirectory(JYTHON_ROOT, loadExpectedFailures());
 	}
@@ -46,10 +49,15 @@ public class Python27ParserTest {
 	@Test
 	public void testParseSimpleInput() {
 		StringBuilder b = new StringBuilder();
-		b.append("if os.system('nmake /nologo /c /f msisupport.mak') != 0:");
-		b.append("  raise RuntimeError(\"'nmake /f msisupport.mak' failed\")\n");
-		b.append("if msilib.pe_type(dll_path) != msilib.pe_type('msisupport.dll'):\n");
-		b.append("  raise SystemError, 'msisupport.dll for incorrect architecture'\n");
+		b.append("def build_mingw_lib(dll_path, def_file, dll_file, mingw_lib):\n");
+		b.append("    warning = 'WARNING: %s - libpythonXX.a not built'\n");
+		b.append("    gendef = find_executable('gendef')\n");
+		b.append("    dlltool = find_executable('dlltool')\n");
+
+		b.append("    if not gendef or not dlltool:\n");
+		b.append("        print warning % 'gendef and/or dlltool were not found'\n");
+		b.append("        return False\n");
+		b.append("    return True\n");
 		assertParseable(new ANTLRInputStream(b.toString()));
 	}
 

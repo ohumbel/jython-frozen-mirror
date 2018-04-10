@@ -40,13 +40,7 @@
  *  - varargslist                                    (fpdef instead of vfpdef)
  *  - fpdef: NAME | '(' fplist ')'
  *  - fplist: fpdef (',' fpdef)* [',']
- *  - small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
- *  - expr_stmt
- *  - print_stmt                                     (not present in 3.3)
- *  - raise_stmt
  *  - import_from
- *  - exec_stmt
- *  - nonlocal_stmt                                  (not present in 2.7)
  *  - except_clause
  *  - test_nocond                                    (not present in 2.7)
  *  - lambdef_nocond                                 (not present in 2.7)
@@ -64,6 +58,12 @@
  *  - comp_if
  *  - testlist1                                      (not present in 3.3)
  *  - yield_expr
+ *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
+ *  + print_stmt                                     (not present in 3.3)
+ *  + exec_stmt
+ *  + nonlocal_stmt                                  (not present in 2.7)
+ *  = expr_stmt
+ *  = raise_stmt
  */
    
 grammar Python27;
@@ -268,16 +268,17 @@ simple_stmt
  : small_stmt ( ';' small_stmt )* ';'? NEWLINE
  ;
 
-/// small_stmt: (expr_stmt | del_stmt | pass_stmt | flow_stmt |
-///              import_stmt | global_stmt | nonlocal_stmt | assert_stmt)
+/// small_stmt: (expr_stmt | print_stmt  | del_stmt | pass_stmt | flow_stmt |
+///              import_stmt | global_stmt | exec_stmt | assert_stmt)
 small_stmt
  : expr_stmt 
+ | print_stmt 
  | del_stmt 
  | pass_stmt 
  | flow_stmt 
  | import_stmt 
  | global_stmt 
- | nonlocal_stmt 
+ | exec_stmt 
  | assert_stmt
  ;
 
@@ -288,6 +289,14 @@ expr_stmt
                       | ( '=' ( yield_expr| testlist_star_expr ) )*
                       )
  ;           
+
+/// print_stmt: 'print' ( [ test (',' test)* [','] ] |
+///                       '>>' test [ (',' test)+ [','] ] )
+print_stmt
+ : 'print' ( ( test (',' test)* ','? )?
+           | '>>' test ( (',' test)+ ','? )?
+           )
+ ;
 
 /// testlist_star_expr: (test|star_expr) (',' (test|star_expr))* [',']
 testlist_star_expr
@@ -410,9 +419,9 @@ global_stmt
  : GLOBAL NAME ( ',' NAME )*
  ;
 
-/// nonlocal_stmt: 'nonlocal' NAME (',' NAME)*
-nonlocal_stmt
- : NONLOCAL NAME ( ',' NAME )*
+/// exec_stmt: 'exec' expr ['in' test [',' test]]
+exec_stmt
+ : 'exec' expr ( 'in' test ( ',' test )? )?
  ;
 
 /// assert_stmt: 'assert' test [',' test]
