@@ -31,8 +31,39 @@
  
 /*
  * The origin of this Python27 grammar is the above python3-parser project.
- * The rules are downgraded, adapted from the official Python 2.7.13 grammar
+ * The rules are adapted from the official Python 2.7.13 grammar:
  * https://docs.python.org/2/reference/grammar.html
+ * 
+ * This is a list of the differences between the 2.7.13 and the 3.3 specification:
+ *  - funcdef: 'def' NAME parameters ':' suite       (no ['->' test])
+ *  - parameters: '(' [varargslist] ')'              (varargslist instead of typedargslist) 
+ *  - varargslist                                    (fpdef instead of vfpdef)
+ *  - fpdef: NAME | '(' fplist ')'
+ *  - fplist: fpdef (',' fpdef)* [',']
+ *  - small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
+ *  - expr_stmt
+ *  - print_stmt                                     (not present in 3.3)
+ *  - raise_stmt
+ *  - import_from
+ *  - exec_stmt
+ *  - nonlocal_stmt                                  (not present in 2.7)
+ *  - except_clause
+ *  - test_nocond                                    (not present in 2.7)
+ *  - lambdef_nocond                                 (not present in 2.7)
+ *  - star_expr                                      (not present in 2.7)
+ *  - atom                                           (listmaker instead of testlist_comp, although present)
+ *  - listmaker                                      (not present in 3.3)
+ *  - testlist_comp
+ *  - subscript
+ *  - exprlist
+ *  - classdef
+ *  - argument                                       (eventually the same)
+ *  - list_iter                                      (not present in 3.3)
+ *  - list_for                                       (not present in 3.3)
+ *  - list_if                                        (not present in 3.3)
+ *  - comp_if
+ *  - testlist1                                      (not present in 3.3)
+ *  - yield_expr
  */
    
 grammar Python27;
