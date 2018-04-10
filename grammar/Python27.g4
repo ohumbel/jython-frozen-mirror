@@ -293,9 +293,9 @@ expr_stmt
 /// print_stmt: 'print' ( [ test (',' test)* [','] ] |
 ///                       '>>' test [ (',' test)+ [','] ] )
 print_stmt
- : 'print' ( ( test (',' test)* ','? )?
-           | '>>' test ( (',' test)+ ','? )?
-           )
+ : PRINT ( ( test (',' test)* ','? )?
+         | '>>' test ( (',' test)+ ','? )?
+         )
  ;
 
 /// testlist_star_expr: (test|star_expr) (',' (test|star_expr))* [',']
@@ -421,7 +421,7 @@ global_stmt
 
 /// exec_stmt: 'exec' expr ['in' test [',' test]]
 exec_stmt
- : 'exec' expr ( 'in' test ( ',' test )? )?
+ : EXEC expr ( IN test ( ',' test )? )?
  ;
 
 /// assert_stmt: 'assert' test [',' test]
@@ -782,6 +782,8 @@ DEL : 'del';
 PASS : 'pass';
 CONTINUE : 'continue';
 BREAK : 'break';
+PRINT : 'print';
+EXEC : 'exec';
 
 NEWLINE
  : ( {atStartOfInput()}?   SPACES

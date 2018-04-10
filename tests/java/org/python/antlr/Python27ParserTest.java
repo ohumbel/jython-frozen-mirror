@@ -30,7 +30,7 @@ public class Python27ParserTest {
 
 	@Test
 	public void testParseSingleFile() throws FileNotFoundException {
-		Path file = Paths.get(CPYTHON_ROOT, "Tools/msi/msi.py");
+		Path file = Paths.get(CPYTHON_ROOT, "Lib/timeit.py");
 		assertParseable(file);
 	}
 
@@ -49,15 +49,20 @@ public class Python27ParserTest {
 	@Test
 	public void testParseSimpleInput() {
 		StringBuilder b = new StringBuilder();
-		b.append("def build_mingw_lib(dll_path, def_file, dll_file, mingw_lib):\n");
-		b.append("    warning = 'WARNING: %s - libpythonXX.a not built'\n");
-		b.append("    gendef = find_executable('gendef')\n");
-		b.append("    dlltool = find_executable('dlltool')\n");
-
-		b.append("    if not gendef or not dlltool:\n");
-		b.append("        print warning % 'gendef and/or dlltool were not found'\n");
-		b.append("        return False\n");
-		b.append("    return True\n");
+		b.append("if isinstance(stmt, basestring):\n");
+		b.append("    stmt = reindent(stmt, 8)\n");
+		b.append("    if isinstance(setup, basestring):\n");
+		b.append("        setup = reindent(setup, 4)\n");
+		b.append("        src = template % {'stmt': stmt, 'setup': setup}\n");
+		b.append("    elif hasattr(setup, '__call__'):\n");
+		b.append("        src = template % {'stmt': stmt, 'setup': '_setup()'}\n");
+		b.append("        ns['_setup'] = setup\n");
+		b.append("    else:\n");
+		b.append("        raise ValueError('setup is neither a string nor callable')\n");
+		b.append("    self.src = src # Save for traceback display\n");
+		b.append("    code = compile(src, dummy_src_name, 'exec')\n");
+		b.append("    exec code in globals(), ns\n");
+		b.append("    self.inner = ns['inner']\n");
 		assertParseable(new ANTLRInputStream(b.toString()));
 	}
 
