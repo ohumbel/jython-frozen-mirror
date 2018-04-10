@@ -28,6 +28,13 @@
  *                https://github.com/bkiers/python3-parser
  * Developed by : Bart Kiers, bart@big-o.nl
  */
+ 
+/*
+ * The origin of this Python27 grammar is the above python3-parser project.
+ * The rules are downgraded, adapted from the official Python 2.7.13 grammar
+ * https://docs.python.org/2/reference/grammar.html
+ */
+   
 grammar Python27;
 
 
