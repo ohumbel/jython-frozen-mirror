@@ -49,20 +49,10 @@ public class Python27ParserTest {
 	@Test
 	public void testParseSimpleInput() {
 		StringBuilder b = new StringBuilder();
-		b.append("if isinstance(stmt, basestring):\n");
-		b.append("    stmt = reindent(stmt, 8)\n");
-		b.append("    if isinstance(setup, basestring):\n");
-		b.append("        setup = reindent(setup, 4)\n");
-		b.append("        src = template % {'stmt': stmt, 'setup': setup}\n");
-		b.append("    elif hasattr(setup, '__call__'):\n");
-		b.append("        src = template % {'stmt': stmt, 'setup': '_setup()'}\n");
-		b.append("        ns['_setup'] = setup\n");
-		b.append("    else:\n");
-		b.append("        raise ValueError('setup is neither a string nor callable')\n");
-		b.append("    self.src = src # Save for traceback display\n");
-		b.append("    code = compile(src, dummy_src_name, 'exec')\n");
-		b.append("    exec code in globals(), ns\n");
-		b.append("    self.inner = ns['inner']\n");
+		b.append("def _execvpe(file, args, env=None):\n");
+		b.append("    if saved_exc:\n");
+		b.append("        raise error, saved_exc, saved_tb\n");
+		b.append("    raise error, e, tb\n");
 		assertParseable(new ANTLRInputStream(b.toString()));
 	}
 

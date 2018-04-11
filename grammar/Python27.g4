@@ -63,7 +63,7 @@
  *  + exec_stmt
  *  + nonlocal_stmt                                  (not present in 2.7)
  *  = expr_stmt
- *  = raise_stmt
+ *  + raise_stmt
  */
    
 grammar Python27;
