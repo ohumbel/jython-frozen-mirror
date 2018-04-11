@@ -17,7 +17,8 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
-import org.antlr.v4.runtime.ANTLRInputStream;
+import org.antlr.v4.runtime.CharStream;
+import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.junit.Ignore;
@@ -53,7 +54,7 @@ public class Python27ParserTest {
 		b.append("    if saved_exc:\n");
 		b.append("        raise error, saved_exc, saved_tb\n");
 		b.append("    raise error, e, tb\n");
-		assertParseable(new ANTLRInputStream(b.toString()));
+		assertParseable(CharStreams.fromString(b.toString()));
 	}
 
 	private static Set<String> loadExpectedFailures() throws IOException {
@@ -90,14 +91,14 @@ public class Python27ParserTest {
 	private static void assertParseable(Path file) throws FileNotFoundException {
 		try (InputStream inputStream = Files.newInputStream(file)) {
 			System.out.println(System.out.format("parsing file: %s ", file));
-			assertParseable(new ANTLRInputStream(inputStream));
+			assertParseable(CharStreams.fromStream(inputStream));
 		} catch (IOException e) {
 			throw new FileNotFoundException(file.toString());
 		}
 
 	}
 
-	private static void assertParseable(ANTLRInputStream input) {
+	private static void assertParseable(CharStream input) {
 		Python27Lexer lexer = new Python27Lexer(input);
 		DescriptiveBailErrorListener errorListener = new DescriptiveBailErrorListener();
 		lexer.addErrorListener(errorListener);
