@@ -7,17 +7,17 @@
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
 	<classpathentry kind="lib" path="extlibs/non-distributable/ant-1.10.0.jar"/>
-	<classpathentry kind="lib" path="extlibs/jnr-posix-3.0.31.jar"/>
-	<classpathentry kind="lib" path="extlibs/jnr-constants-0.9.5.jar"/>
-	<classpathentry kind="lib" path="extlibs/asm-5.0.4.jar"/>
-	<classpathentry kind="lib" path="extlibs/asm-commons-5.0.4.jar"/>
-	<classpathentry kind="lib" path="extlibs/asm-util-5.0.4.jar"/>
-	<classpathentry kind="lib" path="extlibs/guava-20.0.jar"/>
-	<classpathentry kind="lib" path="extlibs/jline-2.14.2.jar"/>
+	<classpathentry kind="lib" path="extlibs/jnr-posix-3.0.41.jar"/>
+	<classpathentry kind="lib" path="extlibs/jnr-constants-0.9.9.jar"/>
+	<classpathentry kind="lib" path="extlibs/asm-5.2.jar"/>
+	<classpathentry kind="lib" path="extlibs/asm-commons-5.2.jar"/>
+	<classpathentry kind="lib" path="extlibs/asm-util-5.2.jar"/>
+	<classpathentry kind="lib" path="extlibs/guava-22.0-android.jar"/>
+	<classpathentry kind="lib" path="extlibs/jline-2.14.5.jar"/>
 	<classpathentry kind="lib" path="extlibs/java-sizeof-0.0.5.jar"/>
 	<classpathentry kind="lib" path="extlibs/servlet-api-2.5.jar"/>
-	<classpathentry kind="lib" path="extlibs/commons-compress-1.12.jar"/>
-	<classpathentry kind="lib" path="extlibs/jffi-1.2.13.jar"/>
+	<classpathentry kind="lib" path="extlibs/commons-compress-1.14.jar"/>
+	<classpathentry kind="lib" path="extlibs/jffi-1.2.15.jar"/>
 	<classpathentry kind="lib" path="extlibs/jffi-Darwin.jar"/>
 	<classpathentry kind="lib" path="extlibs/non-distributable/ifxjdbc.jar"/>
 	<classpathentry kind="lib" path="extlibs/non-distributable/ojdbc14.jar"/>
