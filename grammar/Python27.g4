@@ -36,10 +36,6 @@
  * 
  * This is a list of the differences between the 2.7.13 and the 3.3 specification:
  *  - funcdef: 'def' NAME parameters ':' suite       (no ['->' test])
- *  - parameters: '(' [varargslist] ')'              (varargslist instead of typedargslist) 
- *  - varargslist                                    (fpdef instead of vfpdef)
- *  - fpdef: NAME | '(' fplist ')'
- *  - fplist: fpdef (',' fpdef)* [',']
  *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
  *  + print_stmt                                     (not present in 3.3)
@@ -69,6 +65,13 @@
  *  + yield_expr
  *  + subscript
  *  + except_clause
+ *  + fpdef                                          (not present in 3.3)
+ *  + fplist                                         (not present in 3.3)
+ *  + tfpdef                                         (not present in 2.7)
+ *  + vfpdef                                         (not present in 2.7)
+ *  + typedargslist                                  (not present in 2.7)
+ *  + parameters: '(' [varargslist] ')'              (varargslist instead of typedargslist) 
+ *  + varargslist                                    (fpdef instead of vfpdef)
  */
    
 grammar Python27;
@@ -223,43 +226,30 @@ funcdef
  : DEF NAME parameters ( '->' test )? ':' suite
  ;
 
-/// parameters: '(' [typedargslist] ')'
+/// parameters: '(' [varargslist] ')'
 parameters
- : '(' typedargslist? ')'
+ : '(' varargslist? ')'
  ;
 
-/// typedargslist: (tfpdef ['=' test] (',' tfpdef ['=' test])* [','
-///                ['*' [tfpdef] (',' tfpdef ['=' test])* [',' '**' tfpdef] | '**' tfpdef]]
-///              |  '*' [tfpdef] (',' tfpdef ['=' test])* [',' '**' tfpdef] | '**' tfpdef)
-typedargslist
- : tfpdef ( '=' test )? ( ',' tfpdef ( '=' test )? )* ( ',' ( '*' tfpdef? ( ',' tfpdef ( '=' test )? )* ( ',' '**' tfpdef )? 
-                                                            | '**' tfpdef 
-                                                            )? 
-                                                      )?
- | '*' tfpdef? ( ',' tfpdef ( '=' test )? )* ( ',' '**' tfpdef )? 
- | '**' tfpdef
- ;
-
-/// tfpdef: NAME [':' test]
-tfpdef
- : NAME ( ':' test )?
- ;
-
-/// varargslist: (vfpdef ['=' test] (',' vfpdef ['=' test])* [','
-///       ['*' [vfpdef] (',' vfpdef ['=' test])* [',' '**' vfpdef] | '**' vfpdef]]
-///     |  '*' [vfpdef] (',' vfpdef ['=' test])* [',' '**' vfpdef] | '**' vfpdef)
+/// varargslist: ((fpdef ['=' test] ',')*
+///               ('*' NAME [',' '**' NAME] | '**' NAME) |
+///               fpdef ['=' test] (',' fpdef ['=' test])* [','])
 varargslist
- : vfpdef ( '=' test )? ( ',' vfpdef ( '=' test )? )* ( ',' ( '*' vfpdef? ( ',' vfpdef ( '=' test )? )* ( ',' '**' vfpdef )? 
-                                                            | '**' vfpdef 
-                                                            )? 
-                                                      )?
- | '*' vfpdef? ( ',' vfpdef ( '=' test )? )* ( ',' '**' vfpdef )?
- | '**' vfpdef
+ : ( fpdef ( '=' test )? ',' )* ( '*' NAME ( ',' '**' NAME )? | '**' NAME )
+ |
+ fpdef ( '=' test )? ( ',' fpdef ( '=' test )? )* ','?
  ;
 
-/// vfpdef: NAME
-vfpdef
+/// fpdef: NAME | '(' fplist ')'
+fpdef
  : NAME
+ | 
+ '(' fplist ')'
+ ;
+
+/// fplist: fpdef (',' fpdef)* [',']
+fplist
+ : fpdef ( ',' fpdef )* ','?
  ;
 
 /// stmt: simple_stmt | compound_stmt
