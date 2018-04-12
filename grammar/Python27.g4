@@ -41,7 +41,6 @@
  *  - fpdef: NAME | '(' fplist ')'
  *  - fplist: fpdef (',' fpdef)* [',']
  *  - except_clause
- *  - subscript
  *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
  *  + print_stmt                                     (not present in 3.3)
@@ -69,6 +68,7 @@
  *  + classdef
  *  + yield_arg                                      (not present in 2.7)
  *  + yield_expr
+ *  + subscript
  */
    
 grammar Python27;
@@ -678,10 +678,13 @@ subscriptlist
  : subscript ( ',' subscript )* ','?
  ;
 
-/// subscript: test | [test] ':' [test] [sliceop]
+/// subscript: '.' '.' '.' | test | [test] ':' [test] [sliceop]
 subscript
- : test 
- | test? ':' test? sliceop?
+ : '.' '.' '.'
+ | 
+ test 
+ | 
+ test? ':' test? sliceop?
  ;
 
 /// sliceop: ':' [test]
