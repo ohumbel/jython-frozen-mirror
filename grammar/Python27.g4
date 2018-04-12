@@ -42,7 +42,6 @@
  *  - fplist: fpdef (',' fpdef)* [',']
  *  - except_clause
  *  - subscript
- *  - classdef
  *  - yield_expr
  *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
@@ -68,6 +67,7 @@
  *  + test_nocond                                    (not present in 2.7)
  *  + argument                                       (eventually the same)
  *  + import_from
+ *  + classdef
  */
    
 grammar Python27;
@@ -715,9 +715,9 @@ dictorsetmaker
         )
  ;
 
-/// classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
+/// classdef: 'class' NAME ['(' [testlist] ')'] ':' suite
 classdef
- : CLASS NAME ( '(' arglist? ')' )? ':' suite
+ : CLASS NAME ( '(' testlist? ')' )? ':' suite
  ;
 
 /// arglist: (argument ',')* (argument [',']
