@@ -40,11 +40,9 @@
  *  - varargslist                                    (fpdef instead of vfpdef)
  *  - fpdef: NAME | '(' fplist ')'
  *  - fplist: fpdef (',' fpdef)* [',']
- *  - import_from
  *  - except_clause
  *  - subscript
  *  - classdef
- *  - argument                                       (eventually the same)
  *  - yield_expr
  *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
@@ -68,6 +66,8 @@
  *  + comp_if
  *  + lambdef_nocond                                 (not present in 2.7)
  *  + test_nocond                                    (not present in 2.7)
+ *  + argument                                       (eventually the same)
+ *  + import_from
  */
    
 grammar Python27;
@@ -375,13 +375,13 @@ import_name
  : IMPORT dotted_as_names
  ;
 
-/// # note below: the ('.' | '...') is necessary because '...' is tokenized as ELLIPSIS
-/// import_from: ('from' (('.' | '...')* dotted_name | ('.' | '...')+)
+/// import_from: ('from' ('.'* dotted_name | '.'+)
 ///               'import' ('*' | '(' import_as_names ')' | import_as_names))
 import_from
- : FROM ( ( '.' | '...' )* dotted_name 
-        | ('.' | '...')+ 
-        )
+ : FROM ( '.'* dotted_name 
+          | 
+          '.'+
+        ) 
    IMPORT ( '*' 
           | '(' import_as_names ')' 
           | import_as_names
@@ -732,7 +732,7 @@ arglist
 
 /// # The reason that keywords are test nodes instead of NAME is that using NAME
 /// # results in an ambiguity. ast.c makes sure it's a NAME.
-/// argument: test [comp_for] | test '=' test  # Really [keyword '='] test
+/// argument: test [comp_for] | test '=' test
 argument
  : test comp_for? 
  | test '=' test
