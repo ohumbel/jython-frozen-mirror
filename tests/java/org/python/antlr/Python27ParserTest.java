@@ -36,7 +36,6 @@ public class Python27ParserTest {
 	}
 
 	@Test
-	@Ignore
 	public void testParseWholePython27Library() throws IOException {
 		parseDirectory(CPYTHON_ROOT, loadExpectedFailures());
 	}
@@ -76,16 +75,19 @@ public class Python27ParserTest {
 		ParseFiles pf = new ParseFiles();
 		Files.walkFileTree(directory, pf);
 		List<String> failedFiles = pf.getFailedFiles();
-		for (String failedFile : failedFiles) {
-			System.out.println(failedFile);
-			String shortFailedFile = failedFile.replace(root + "/", "");
-			assertTrue("unexpected failing: " + shortFailedFile, expectedFailures.contains(shortFailedFile));
+		if (!failedFiles.isEmpty()) {
+			System.out.println("\n---Failures:");
 		}
+		failedFiles.stream().sorted().forEach(failedFile -> failureOutput(root, failedFile));
+
 		int numberOfFailedFiles = failedFiles.size();
 		int expectedNumberOfFailedFiles = expectedFailures.size();
 		assertTrue("too much failing files: " + numberOfFailedFiles + " instead of " + expectedNumberOfFailedFiles,
 				numberOfFailedFiles <= expectedNumberOfFailedFiles);
-		assertEquals("acutally failing (max=" + expectedNumberOfFailedFiles + ")", 0, numberOfFailedFiles);
+	}
+
+	private static void failureOutput(String root, String failedFile) {
+		System.out.println(failedFile.replace(root + "/", "").concat("=\"failure\""));
 	}
 
 	private static void assertParseable(Path file) throws FileNotFoundException {
@@ -139,7 +141,7 @@ public class Python27ParserTest {
 			if (attr.isRegularFile() && fileName.endsWith(".py")) {
 				canParse = true;
 				// and now all the exclusions:
-				if (is_not_a_pure_3_grammar(fileName) || print_is_not_a_function(fileName) || bad_syntax(fileName)
+				if (is_not_a_pure_2_nor_3_grammar(fileName) || print_is_not_a_function(fileName) || bad_syntax(fileName)
 						|| not_sure_whats_wrong(fileName)) {
 					canParse = false;
 				}
@@ -147,14 +149,17 @@ public class Python27ParserTest {
 			return canParse;
 		}
 
-		private boolean is_not_a_pure_3_grammar(String name) {
+		private boolean is_not_a_pure_2_nor_3_grammar(String name) {
 			return name.contains("/test2to3/") || name.contains("/lib2to3/");
 		}
 
 		private boolean print_is_not_a_function(String name) {
-			return name.endsWith("/PC/VC6/rmpyc.py") || name.endsWith("/PC/VS7.1/build_ssl.py")
-					|| name.endsWith("/PC/VS7.1/field3.py") || name.endsWith("/PC/VS7.1/rmpyc.py")
-					|| name.endsWith("/Tools/msi/msilib.py");
+			return false; // for 2.7
+			// return name.endsWith("/PC/VC6/rmpyc.py") ||
+			// name.endsWith("/PC/VS7.1/build_ssl.py")
+			// || name.endsWith("/PC/VS7.1/field3.py") ||
+			// name.endsWith("/PC/VS7.1/rmpyc.py")
+			// || name.endsWith("/Tools/msi/msilib.py");
 		}
 
 		private boolean bad_syntax(String name) {
