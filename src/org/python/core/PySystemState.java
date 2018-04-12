@@ -82,6 +82,9 @@ public class PySystemState extends PyObject implements AutoCloseable,
 
     public final static PyString float_repr_style = Py.newString("short");
 
+    /** Nominal Jython file system encoding (as <code>sys.getfilesystemencoding()</code>) */
+    static final PyString FILE_SYSTEM_ENCODING = Py.newString("utf-8");
+
     public static boolean py3kwarning = false;
 
     public final static Class flags = Options.class;
@@ -95,7 +98,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
      */
 
     public static final PyObject copyright = Py.newString(
-            "Copyright (c) 2000-2016 Jython Developers.\n" + "All rights reserved.\n\n" +
+            "Copyright (c) 2000-2017 Jython Developers.\n" + "All rights reserved.\n\n" +
             "Copyright (c) 2000 BeOpen.com.\n" + "All Rights Reserved.\n\n" +
             "Copyright (c) 2000 The Apache Software Foundation.\n" + "All rights reserved.\n\n" +
             "Copyright (c) 1995-2000 Corporation for National Research Initiatives.\n"
@@ -109,12 +112,25 @@ public class PySystemState extends PyObject implements AutoCloseable,
     public static PackageManager packageManager;
     private static File cachedir;
 
-    private static PyList defaultPath;
-    private static PyList defaultArgv;
-    private static PyObject defaultExecutable;
+    private static PyList defaultPath; // list of bytes or unicode
+    private static PyList defaultArgv; // list of bytes or unicode
+    private static PyObject defaultExecutable; // bytes or unicode or None
 
     public static Properties registry; // = init_registry();
+    /**
+     * A string giving the site-specific directory prefix where the platform independent Python
+     * files are installed; by default, this is based on the property <code>python.home</code> or
+     * the location of the Jython JAR. The main collection of Python library modules is installed in
+     * the directory <code>prefix/Lib</code>. This object should contain bytes in the file system
+     * encoding for consistency with use in the standard library (see <code>sysconfig.py</code>).
+     */
     public static PyObject prefix;
+    /**
+     * A string giving the site-specific directory prefix where the platform-dependent Python files
+     * are installed; by default, this is the same as {@link #exec_prefix}. This object should
+     * contain bytes in the file system encoding for consistency with use in the standard library
+     * (see <code>sysconfig.py</code>).
+     */
     public static PyObject exec_prefix = Py.EmptyString;
 
     public static final PyString byteorder = new PyString("big");
@@ -134,7 +150,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
 
     public PyList warnoptions = new PyList();
     public PyObject builtins;
-    private static PyObject defaultPlatform = new PyString("java");
+    private static PyObject defaultPlatform = new PyShadowString("java", getNativePlatform());
     public PyObject platform = defaultPlatform;
 
     public PyList meta_path;
@@ -242,6 +258,10 @@ public class PySystemState extends PyObject implements AutoCloseable,
         // XXX: Remove bean accessors for settrace/profile that we don't want
         dict.__setitem__("trace", null);
         dict.__setitem__("profile", null);
+        dict.__setitem__("windowsversion", null);
+        if (!System.getProperty("os.name").startsWith("Windows")) {
+            dict.__setitem__("getwindowsversion", null);
+        }
     }
 
     void reload() throws PyIgnoreMethodTag {
@@ -327,6 +347,10 @@ public class PySystemState extends PyObject implements AutoCloseable,
 
     public void setPlatform(PyObject value) {
         platform = value;
+    }
+
+    public WinVersion getwindowsversion() {
+        return WinVersion.getWinVersion();
     }
 
     public synchronized codecs.CodecState getCodecState() {
@@ -496,7 +520,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
     }
 
     public PyObject getfilesystemencoding() {
-        return Py.None;
+        return FILE_SYSTEM_ENCODING;
     }
 
 
@@ -779,7 +803,31 @@ public class PySystemState extends PyObject implements AutoCloseable,
         if (version.equals("12")) {
             version = "1.2";
         }
-        defaultPlatform = new PyString("java" + version);
+        defaultPlatform = new PyShadowString("java" + version, getNativePlatform());
+    }
+
+    /**
+     * Emulates CPython's way to name sys.platform.
+     */
+    public static String getNativePlatform() {
+        /* Works according to this table:
+            System              Value
+            --------------------------
+            Linux (2.x and 3.x) linux2
+            Windows             win32
+            Windows/Cygwin      cygwin
+            Mac OS X            darwin
+            OS/2                os2
+            OS/2 EMX            os2emx
+            RiscOS              riscos
+            AtheOS              atheos
+        */
+        String osname = System.getProperty("os.name");
+        if (osname.equals("Linux")) return "linux2";
+        if (osname.equals("Mac OS X")) return "darwin";
+        if (osname.toLowerCase().contains("cygwin")) return "cygwin";
+        if (osname.startsWith("Windows")) return "win32";
+        return osname.replaceAll("[\\s/]", "").toLowerCase();
     }
 
     private static void initRegistry(Properties preProperties, Properties postProperties,
@@ -808,10 +856,10 @@ public class PySystemState extends PyObject implements AutoCloseable,
             }
         }
         if (prefix != null) {
-            PySystemState.prefix = Py.newString(prefix);
+            PySystemState.prefix = Py.fileSystemEncode(prefix);
         }
         if (exec_prefix != null) {
-            PySystemState.exec_prefix = Py.newString(exec_prefix);
+            PySystemState.exec_prefix = Py.fileSystemEncode(exec_prefix);
         }
         try {
             String jythonpath = System.getenv("JYTHONPATH");
@@ -1123,7 +1171,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
         }
         cachedir = new File(props.getProperty(PYTHON_CACHEDIR, CACHEDIR_DEFAULT_NAME));
         if (!cachedir.isAbsolute()) {
-            cachedir = new File(prefix == null ? null : prefix.toString(), cachedir.getPath());
+            String prefixString = prefix == null ? null : Py.fileSystemDecode(prefix);
+            cachedir = new File(prefixString, cachedir.getPath());
         }
     }
 
@@ -1142,16 +1191,17 @@ public class PySystemState extends PyObject implements AutoCloseable,
         PyList argv = new PyList();
         if (args != null) {
             for (String arg : args) {
-                argv.append(Py.newStringOrUnicode(arg));
+                // For consistency with CPython and the standard library, sys.argv is FS-encoded.
+                argv.append(Py.fileSystemEncode(arg));
             }
         }
         return argv;
     }
 
     /**
-     * Determine the default sys.executable value from the registry.
-     * If registry is not set (as in standalone jython jar), will use sys.prefix + /bin/jython(.exe) and the file may
-     * not exist. Users can create a wrapper in it's place to make it work in embedded environments.
+     * Determine the default sys.executable value from the registry. If registry is not set (as in
+     * standalone jython jar), we will use sys.prefix + /bin/jython(.exe) and the file may not
+     * exist. Users can create a wrapper in it's place to make it work in embedded environments.
      * Only if sys.prefix is null, returns Py.None
      *
      * @param props a Properties registry
@@ -1159,26 +1209,26 @@ public class PySystemState extends PyObject implements AutoCloseable,
      */
     private static PyObject initExecutable(Properties props) {
         String executable = props.getProperty("python.executable");
-        if (executable == null) {
+        File executableFile;
+        if (executable != null) {
+            // The executable from the registry is a Unicode String path
+            executableFile = new File(executable);
+        } else {
             if (prefix == null) {
                 return Py.None;
             } else {
-                executable = prefix.asString() + File.separator + "bin" + File.separator;
-                if (Platform.IS_WINDOWS) {
-                    executable += "jython.exe";
-                } else {
-                    executable += "jython";
-                }
+                // The prefix is a unicode or encoded bytes object
+                executableFile = new File(Py.fileSystemDecode(prefix),
+                        Platform.IS_WINDOWS ? "bin\\jython.exe" : "bin/jython");
             }
         }
 
-        File executableFile = new File(executable);
         try {
             executableFile = executableFile.getCanonicalFile();
         } catch (IOException ioe) {
             executableFile = executableFile.getAbsoluteFile();
         }
-        return new PyString(executableFile.getPath());
+        return Py.newStringOrUnicode(executableFile.getPath()); // XXX always bytes in CPython
     }
 
     /**
@@ -1321,8 +1371,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
         PyList path = new PyList();
         addPaths(path, props.getProperty("python.path", ""));
         if (prefix != null) {
-            String libpath = new File(prefix.toString(), "Lib").toString();
-            path.append(new PyString(libpath));
+            String libpath = new File(Py.fileSystemDecode(prefix), "Lib").toString();
+            path.append(Py.fileSystemEncode(libpath)); // XXX or newUnicode?
         }
         if (standalone) {
             // standalone jython: add the /Lib directory inside JYTHON_JAR to the path
@@ -1365,7 +1415,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
     private static void addPaths(PyList path, String pypath) {
         StringTokenizer tok = new StringTokenizer(pypath, java.io.File.pathSeparator);
         while (tok.hasMoreTokens()) {
-            path.append(new PyString(tok.nextToken().trim()));
+            // Use unicode object if necessary to represent the element
+            path.append(Py.newStringOrUnicode(tok.nextToken().trim())); // XXX or newUnicode?
         }
     }
 
@@ -1492,6 +1543,10 @@ public class PySystemState extends PyObject implements AutoCloseable,
         return f;
     }
 
+    public static PyDictionary _current_frames() {
+        return ThreadStateMapping._current_frames();
+    }
+
     public void registerCloser(Callable<Void> resourceCloser) {
         closer.registerCloser(resourceCloser);
     }
@@ -1504,6 +1559,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
         closer.cleanup();
     }
 
+    @Override
     public void close() { cleanup(); }
 
     public static class PySystemStateCloser {
@@ -1524,6 +1580,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
             Reference<? extends PySystemState> ref;
             while ((ref = systemStateQueue.poll()) != null) {
                 PySystemStateCloser closer = sysClosers.get(ref);
+                sysClosers.remove(ref);
                 closer.cleanup();
             }
         }
@@ -1612,6 +1669,50 @@ public class PySystemState extends PyObject implements AutoCloseable,
             }
         }
 
+    }
+
+    /**
+     * Backed as follows:
+     * Windows: cmd.exe /C ver (part after "Windows")
+     * Other:   uname -v
+     */
+    public static String getSystemVersionString() {
+        try {
+            String uname_sysver;
+            boolean win = System.getProperty("os.name").startsWith("Windows");
+            Process p = Runtime.getRuntime().exec(
+                    win ? "cmd.exe /C ver" : "uname -v");
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(p.getInputStream()));
+            uname_sysver = br.readLine();
+            while (uname_sysver != null && uname_sysver.length() == 0) {
+                uname_sysver = br.readLine();
+            }
+            // to end the process sanely in case we deal with some
+            // implementation that emits additional new-lines:
+            while (br.readLine() != null) {
+                ;
+            }
+            br.close();
+            if (p.waitFor() != 0) {
+                // No fallback for sysver available
+                uname_sysver = "";
+            }
+            if (win && uname_sysver.length() > 0) {
+                int start = uname_sysver.toLowerCase().indexOf("version ");
+                if (start != -1) {
+                    start += 8;
+                    int end = uname_sysver.length();
+                    if (uname_sysver.endsWith("]")) {
+                        --end;
+                    }
+                    uname_sysver = uname_sysver.substring(start, end);
+                }
+            }
+            return uname_sysver;
+        } catch (Exception e) {
+            return "";
+        }
     }
 
 
@@ -1895,80 +1996,19 @@ class FloatInfo extends PyTuple {
         );
     }
 
-
-    /* Traverseproc implementation */
     @Override
-    public int traverse(Visitproc visit, Object arg) {
-        int retVal = super.traverse(visit, arg);
-        if (max != null) {
-            retVal = visit.visit(max, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        if (max_exp != null) {
-            retVal = visit.visit(max_exp, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        if (max_10_exp != null) {
-            retVal = visit.visit(max_10_exp, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        if (min != null) {
-            retVal = visit.visit(min, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        if (min_exp != null) {
-            retVal = visit.visit(min_exp, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        if (min_10_exp != null) {
-            retVal = visit.visit(min_10_exp, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        if (dig != null) {
-            retVal = visit.visit(dig, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        if (mant_dig != null) {
-            retVal = visit.visit(mant_dig, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        if (epsilon != null) {
-            retVal = visit.visit(epsilon, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        if (radix != null) {
-            retVal = visit.visit(radix, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        return rounds == null ? 0 : visit.visit(rounds, arg);
+    public PyString __repr__() {
+        return (PyString) Py.newString(
+                TYPE.fastGetName() + "(" +
+                "max=%r, max_exp=%r, max_10_exp=%r, min=%r, min_exp=%r, min_10_exp=%r, "+
+                "dig=%r, mant_dig=%r, epsilon=%r, radix=%r, rounds=%r)").__mod__(this);
     }
 
-    @Override
-    public boolean refersDirectlyTo(PyObject ob) {
-        return ob != null && (ob == max || ob == max_exp || ob == max_10_exp || ob == min
-            || ob == min_exp || ob == min_10_exp || ob == dig
-            || ob == mant_dig || ob == epsilon || ob == radix || ob == rounds);
-    }
+
+    /* Note for Traverseproc implementation:
+     * We needn't visit the fields, because they are also represented as tuple elements
+     * in the parent class. So deferring to super-implementation is sufficient.
+     */
 }
 
 
@@ -1993,22 +2033,79 @@ class LongInfo extends PyTuple {
         return new LongInfo(Py.newLong(30), Py.newLong(4));
     }
 
-
-    /* Traverseproc implementation */
     @Override
-    public int traverse(Visitproc visit, Object arg) {
-        int retVal = super.traverse(visit, arg);
-        if (bits_per_digit != null) {
-            retVal = visit.visit(bits_per_digit, arg);
-            if (retVal != 0) {
-                return retVal;
-            }
-        }
-        return sizeof_digit == null ? 0 : visit.visit(sizeof_digit, arg);
+    public PyString __repr__() {
+        return (PyString) Py.newString(
+                TYPE.fastGetName() + "(" +
+                "bits_per_digit=%r, sizeof_digit=%r)").__mod__(this);
     }
 
-    @Override
-    public boolean refersDirectlyTo(PyObject ob) {
-        return ob != null && (ob == bits_per_digit || ob == sizeof_digit);
-    }
+
+    /* Note for Traverseproc implementation:
+     * We needn't visit the fields, because they are also represented as tuple elements
+     * in the parent class. So deferring to super-implementation is sufficient.
+     */
 }
+
+
+@ExposedType(name = "sys.getwindowsversion", isBaseType = false)
+class WinVersion extends PyTuple {
+
+    @ExposedGet
+    public PyObject major, minor, build, platform, service_pack;
+
+    public static final PyType TYPE = PyType.fromClass(WinVersion.class);
+
+    private WinVersion(PyObject... vals) {
+        super(TYPE, vals);
+
+        major = vals[0];
+        minor = vals[1];
+        build = vals[2];
+        platform = vals[3];
+        service_pack = vals[4];
+    }
+
+    public static WinVersion getWinVersion() {
+        try {
+            String sysver = PySystemState.getSystemVersionString();
+            String[] sys_ver = sysver.split("\\.");
+            int major = Integer.parseInt(sys_ver[0]);
+            int minor = Integer.parseInt(sys_ver[1]);
+            int build = Integer.parseInt(sys_ver[2]);
+            if (major > 6) {
+                major = 6; minor = 2; build = 9200;
+            } else if (major == 6 && minor > 2) {
+                minor = 2; build = 9200;
+            }
+            // emulate deprecation behavior of GetVersionEx:
+            return new WinVersion(
+                    Py.newInteger(major), // major
+                    Py.newInteger(minor), // minor
+                    Py.newInteger(build), // build
+                    Py.newInteger(2), // platform
+                    Py.EmptyString); // service_pack
+        } catch (Exception e) {
+            return new WinVersion(Py.EmptyString, Py.EmptyString,
+                    Py.EmptyString, Py.EmptyString, Py.EmptyString);
+        }
+    }
+
+    @Override
+    public PyString __repr__() {
+        return (PyString) Py.newString(
+                TYPE.fastGetName() + "(major=%r, minor=%r, build=%r, " +
+                "platform=%r, service_pack=%r)").__mod__(this);
+    }
+
+
+    /* Note for traverseproc implementation:
+     * We needn't visit the fields, because they are also represented as tuple elements
+     * in the parent class. So deferring to super-implementation is sufficient.
+     *
+     * (In CPython sys.getwindowsversion can have some keyword-only elements. So far
+     * we don't support these here. If that changes, an actual traverseproc implementation
+     * might be required.
+     */
+}
+

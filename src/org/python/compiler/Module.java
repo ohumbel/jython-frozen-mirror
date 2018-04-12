@@ -10,6 +10,9 @@ import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.io.File;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.Hashtable;
@@ -26,10 +29,12 @@ import org.python.antlr.ast.Num;
 import org.python.antlr.ast.Str;
 import org.python.antlr.ast.Suite;
 import org.python.antlr.base.mod;
+import org.python.core.ClasspathPyImporter;
 import org.python.core.CodeBootstrap;
 import org.python.core.CodeFlag;
 import org.python.core.CodeLoader;
 import org.python.core.CompilerFlags;
+import org.python.core.imp;
 import org.python.core.Py;
 import org.python.core.PyCode;
 import org.python.core.PyBytecode;
@@ -712,12 +717,41 @@ public class Module implements Opcodes, ClassConstants, CompilationContext {
         module.mainCode = main;
     }
 
-    private static PyBytecode loadPyBytecode(String filename) throws RuntimeException
+    private static PyBytecode loadPyBytecode(String filename, boolean try_cpython)
+            throws RuntimeException
     {
+        if (filename.startsWith(ClasspathPyImporter.PYCLASSPATH_PREFIX)) {
+            ClassLoader cld = Py.getSystemState().getClassLoader();
+            if (cld == null) {
+                cld = imp.getParentClassLoader();
+            }
+            URL py_url = cld.getResource(filename.replace(
+                    ClasspathPyImporter.PYCLASSPATH_PREFIX, ""));
+            if (py_url != null) {
+                filename = py_url.getPath();
+            } else {
+                // Should never happen, but let's play it safe and treat this case.
+                throw new RuntimeException(
+                        "\nEncountered too large method code in \n"+filename+",\n"+
+                        "but couldn't resolve that filename within classpath.\n"+
+                        "Make sure the source file is at a proper location.");
+            }
+        }
+        String cpython_cmd_msg =
+                "\n\nAlternatively provide proper CPython 2.7 execute command via"+
+                "\ncpython_cmd property, e.g. call "+
+                "\n    jython -J-Dcpython_cmd=python"+
+                "\nor if running pip on Jython:"+
+                "\n    pip install --global-option=\"-J-Dcpython_cmd=python\" <package>";
+        String large_method_msg = "\nEncountered too large method code in \n"+filename+"\n";
+        String please_provide_msg =
+                "\nPlease provide a CPython 2.7 bytecode file (.pyc) to proceed, e.g. run"+
+                "\npython -m py_compile "+filename+"\nand try again.";
+
         String pyc_filename = filename+"c";
         File pyc_file = new File(pyc_filename);
         if (pyc_file.exists()) {
-            PyFile f = new PyFile(pyc_filename, "r", 4096);
+            PyFile f = new PyFile(pyc_filename, "rb", 4096);
             byte[] bts = f.read(8).toBytes();
             int magic = (bts[1]<< 8) & 0x0000FF00 |
                         (bts[0]<< 0) & 0x000000FF;
@@ -726,11 +760,10 @@ public class Module implements Opcodes, ClassConstants, CompilationContext {
 //                            (bts[5]<< 8) & 0x0000FF00 |
 //                            (bts[4]<< 0) & 0x000000FF;
             if (magic != 62211) { // check Python 2.7 bytecode
-                throw new RuntimeException("Encountered too large method code in \n"+filename+
+                throw new RuntimeException(large_method_msg+
                         "\n"+pyc_filename+
                         "\ncontains wrong bytecode version, not CPython 2.7 bytecode."+
-                        "\nPlease provide a CPython 2.7 bytecode file (.pyc) to proceed, e.g. run"+
-                        "\npython -m py_compile "+filename+"\nand try again.");
+                        please_provide_msg);
             }
             _marshal.Unmarshaller un = new _marshal.Unmarshaller(f);
             PyObject code = un.load();
@@ -738,15 +771,73 @@ public class Module implements Opcodes, ClassConstants, CompilationContext {
             if (code instanceof PyBytecode) {
                 return (PyBytecode) code;
             }
-            throw new RuntimeException("Encountered too large method code in \n"+filename+
+            throw new RuntimeException(large_method_msg+
                     "\n"+pyc_filename+
                     "\ncontains invalid bytecode."+
-                    "\nPlease provide a CPython 2.7 bytecode file (.pyc) to proceed, e.g. run"+
-                    "\npython -m py_compile "+filename+"\nand try again.");
+                    please_provide_msg);
         } else {
-            throw new RuntimeException("Encountered too large method code in \n"+filename+
-                    "\nPlease provide a CPython 2.7 bytecode file (.pyc) to proceed, e.g. run"+
-                    "\npython -m py_compile "+filename+"\nand try again.");
+            String CPython_command = System.getProperty("cpython_cmd");
+            if (try_cpython && CPython_command != null) {
+                // check version...
+                String command_ver = CPython_command+" --version";
+                String command = CPython_command+" -m py_compile "+filename;
+                String tried_create_pyc_msg = "\nTried to create pyc-file by executing\n"+
+                        command+"\nThis failed because of\n";
+                Exception exc = null;
+                int result = 0;
+                try {
+                    Process p = Runtime.getRuntime().exec(command_ver);
+                    // Python 2.7 writes version to error-stream for some reason:
+                    BufferedReader br = new BufferedReader(new InputStreamReader(p.getErrorStream()));
+                    String cp_version = br.readLine();
+                    while (br.readLine() != null) {}
+                    br.close();
+                    if (cp_version == null) {
+                        // Also try input-stream as fallback, just in case...
+                        br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                        cp_version = br.readLine();
+                        while (br.readLine() != null) {}
+                        br.close();
+                    }
+                    result = p.waitFor();
+                    if (!cp_version.startsWith("Python 2.7.")) {
+                        throw new RuntimeException(large_method_msg+
+                                tried_create_pyc_msg+
+                                "wrong Python version: "+cp_version+"."+
+                                "\nRequired is Python 2.7.x.\n"+
+                                please_provide_msg+cpython_cmd_msg);
+                    }
+                }
+                catch (InterruptedException ie) {
+                    exc = ie;
+                }
+                catch (IOException ioe) {
+                    exc = ioe;
+                }
+                if (exc == null && result == 0) {
+                    try {
+                        Process p = Runtime.getRuntime().exec(command);
+                        result = p.waitFor();
+                        if (result == 0) {
+                            return loadPyBytecode(filename, false);
+                        }
+                    }
+                    catch (InterruptedException ie) {
+                        exc = ie;
+                    }
+                    catch (IOException ioe) {
+                        exc = ioe;
+                    }
+                }
+                String exc_msg = large_method_msg+
+                        tried_create_pyc_msg+
+                        (exc != null ? exc.toString() : "bad return: "+result)+".\n"+
+                        please_provide_msg+cpython_cmd_msg;
+                throw exc != null ? new RuntimeException(exc_msg, exc) : new RuntimeException(exc_msg);
+            } else {
+                throw new RuntimeException(large_method_msg+
+                        please_provide_msg+cpython_cmd_msg);
+            }
         }
     }
     
@@ -804,7 +895,7 @@ public class Module implements Opcodes, ClassConstants, CompilationContext {
      *
      * Note that this approach is provisional. In future, Jython might contain
      * the bytecode directly as bytecode-objects. The current approach was
-     * feasible with much less complicated JVM bytecode-manipulation, but needs
+     * feasible with far less complicated JVM bytecode-manipulation, but needs
      * special treatment after class-loading.
      */
     private static void insert_code_str_to_classfile(String name, String code_str, Module module)
@@ -841,7 +932,7 @@ public class Module implements Opcodes, ClassConstants, CompilationContext {
             module.write(ostream);
         } catch (RuntimeException re) {
             if (re.getMessage() != null && re.getMessage().equals("Method code too large!")) {
-                PyBytecode btcode = loadPyBytecode(filename);
+                PyBytecode btcode = loadPyBytecode(filename, true);
                 int thresh = 22000;
                 // No idea, how to determine at this point if a method is oversized, so we just try
                 // a threshold regarding Python code-length, while JVM restriction is actually about
@@ -864,7 +955,7 @@ public class Module implements Opcodes, ClassConstants, CompilationContext {
                             } else {
                                 // If a function needs to be represented as CPython bytecode, we create
                                 // all inner PyCode-items (classes, functions, methods) also as CPython
-                                // bytecode implicitly, so no need so look at them individually.
+                                // bytecode implicitly, so no need to look at them individually.
                                 // Maybe we can later optimize this such that inner methods can be
                                 // JVM-bytecode as well (if not oversized themselves).
                                 for (PyObject item: bcode.co_consts) {

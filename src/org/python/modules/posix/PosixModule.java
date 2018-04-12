@@ -57,6 +57,7 @@ import org.python.core.PyObject;
 import org.python.core.PyString;
 import org.python.core.PySystemState;
 import org.python.core.PyTuple;
+import org.python.core.PyUnicode;
 import org.python.core.Untraversable;
 import org.python.core.imp;
 import org.python.core.io.FileIO;
@@ -486,7 +487,8 @@ public class PosixModule implements ClassDictInit {
         "getcwd() -> path\n\n" +
         "Return a string representing the current working directory.");
     public static PyObject getcwd() {
-        return Py.newStringOrUnicode(Py.getSystemState().getCurrentWorkingDir());
+        // The return value is bytes in the file system encoding
+        return Py.fileSystemEncode(Py.getSystemState().getCurrentWorkingDir());
     }
 
     public static PyString __doc__getcwdu = new PyString(
@@ -525,7 +527,13 @@ public class PosixModule implements ClassDictInit {
         "Return the actual login name.");
     @Hide(value=OS.NT, posixImpl = PosixImpl.JAVA)
     public static PyObject getlogin() {
-        return new PyString(posix.getlogin());
+        String login = posix.getlogin();
+        if (login == null) {
+            // recommend according to https://docs.python.org/2/library/os.html#os.getlogin
+            throw Py.OSError(
+                    "getlogin OS call failed. Preferentially use os.getenv('LOGNAME') instead.");
+        }
+        return new PyString(login);
     }
 
     public static PyString __doc__getppid = new PyString(
@@ -670,9 +678,16 @@ public class PosixModule implements ClassDictInit {
             throw Py.OSError("listdir(): an unknown error occurred: " + path);
         }
 
+        // Return names as bytes or unicode according to the type of the original argument
         PyList list = new PyList();
-        for (String name : names) {
-            list.append(Py.newStringOrUnicode(path, name));
+        if (path instanceof PyUnicode) {
+            for (String name : names) {
+                list.append(Py.newUnicode(name));
+            }
+        } else {
+            for (String name : names) {
+                list.append(Py.fileSystemEncode(name));
+            }
         }
         return list;
     }
@@ -1030,7 +1045,6 @@ public class PosixModule implements ClassDictInit {
         if (uname_cache != null) {
             return uname_cache;
         }
-// todo: Giving os.uname a windows-implementation might break platform.uname. Check this!
         String sysname = System.getProperty("os.name");
         String sysrelease;
         boolean win;
@@ -1096,40 +1110,7 @@ public class PosixModule implements ClassDictInit {
             }
         }
 
-        String uname_sysver;
-        try {
-            Process p = Runtime.getRuntime().exec(
-                    win ? "cmd.exe /C ver" : "uname -v");
-            java.io.BufferedReader br = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(p.getInputStream()));
-            uname_sysver = br.readLine();
-            while (uname_sysver != null && uname_sysver.length() == 0) {
-                uname_sysver = br.readLine();
-            }
-            // to end the process sanely in case we deal with some
-            // implementation that emits additional new-lines:
-            while (br.readLine() != null) {
-                ;
-            }
-            br.close();
-            if (p.waitFor() != 0) {
-                // No fallback for sysver available
-                uname_sysver = "";
-            }
-            if (win && uname_sysver.length() > 0) {
-                int start = uname_sysver.toLowerCase().indexOf("version ");
-                if (start != -1) {
-                    start += 8;
-                    int end = uname_sysver.length();
-                    if (uname_sysver.endsWith("]")) {
-                        --end;
-                    }
-                    uname_sysver = uname_sysver.substring(start, end);
-                }
-            }
-        } catch (Exception e) {
-            uname_sysver = "";
-        }
+        String uname_sysver = PySystemState.getSystemVersionString();
 
         String uname_machine;
         try {
@@ -1187,7 +1168,7 @@ public class PosixModule implements ClassDictInit {
 
         PyObject[] vals = {
                 Py.newString(sysname),
-                Py.newString(uname_nodename),
+                Py.fileSystemEncode(uname_nodename),
                 Py.newString(sysrelease),
                 Py.newString(uname_sysver),
                 Py.newString(uname_machine)
@@ -1371,25 +1352,24 @@ public class PosixModule implements ClassDictInit {
             return environ;
         }
         for (Map.Entry<String, String> entry : env.entrySet()) {
+            // The shell restricts names to a subset of ASCII and values are encoded byte strings.
             environ.__setitem__(
-                    Py.newStringOrUnicode(entry.getKey()),
-                    Py.newStringOrUnicode(entry.getValue()));
+                    Py.newString(entry.getKey()),
+                    Py.fileSystemEncode(entry.getValue()));
         }
         return environ;
     }
 
     /**
-     * Return a path as a String from a PyObject
+     * Return a path as a String from a PyObject, which must be <code>str</code> or
+     * <code>unicode</code>. If the path is a <code>str</code> (that is, <code>bytes</code>), it is
+     * interpreted into Unicode using the file system encoding.
      *
      * @param path a PyObject, raising a TypeError if an invalid path type
      * @return a String path
      */
     private static String asPath(PyObject path) {
-        if (path instanceof PyString) {
-            return path.toString();
-        }
-        throw Py.TypeError(String.format("coercing to Unicode: need string, %s type found",
-                                         path.getType().fastGetName()));
+        return Py.fileSystemDecode(path);
     }
 
     /**

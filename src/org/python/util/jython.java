@@ -196,7 +196,7 @@ public class jython {
         try {
             PyObject runpy = imp.importName("runpy", true);
             PyObject runmodule = runpy.__findattr__("_run_module_as_main");
-            runmodule.__call__(Py.newStringOrUnicode(moduleName), Py.newBoolean(set_argv0));
+            runmodule.__call__(Py.fileSystemEncode(moduleName), Py.newBoolean(set_argv0));
         } catch (Throwable t) {
             Py.printException(t);
             interp.cleanup();
@@ -206,7 +206,7 @@ public class jython {
 
     private static boolean runMainFromImporter(InteractiveConsole interp, String filename) {
         // Support http://bugs.python.org/issue1739468 - Allow interpreter to execute a zip file or directory
-        PyString argv0 = Py.newStringOrUnicode(filename);
+        PyString argv0 = Py.fileSystemEncode(filename);
         PyObject importer = imp.getImporter(argv0);
         if (!(importer instanceof PyNullImporter)) {
              /* argv0 is usable as an import source, so
@@ -323,7 +323,7 @@ public class jython {
             if (path == null) {
                 path = "";
             }
-            Py.getSystemState().path.insert(0, Py.newStringOrUnicode(path));
+            Py.getSystemState().path.insert(0, Py.fileSystemEncode(path));
             if (opts.jar) {
                 try {
                     runJar(opts.filename);
@@ -341,8 +341,8 @@ public class jython {
             } else {
                 try {
                     interp.globals.__setitem__(new PyString("__file__"),
-                            new PyString(opts.filename));
-
+                            // Note that __file__ is widely expected to be encoded bytes
+                            Py.fileSystemEncode(opts.filename));
                     FileInputStream file;
                     try {
                         file = new FileInputStream(new RelativeFile(opts.filename));
@@ -682,6 +682,28 @@ class CommandLineOptions {
         }
 
         int n = args.length - index + 1;
+
+        /* Exceptionally we allow -J-Dcpython_cmd=... also postpone the filename.
+         * E.g. the Linux launcher allows this already on launcher level for all
+         * -J flags, while the Windows launcher does not.
+         *
+         * Todo: Resolve this discrepancy!
+         *
+         * This is required to use cpython_cmd property in context of pip, e.g.
+         * pip install --global-option="-J-Dcpython_cmd=python" <package>
+         * For details about the cpython_cmd property, look into
+         * org.python.compiler.Module.loadPyBytecode source.
+         */
+        int cpython_cmd_pos = -1;
+        for (int i = index; i < args.length; i++) {
+            if (args[i].startsWith("-J-Dcpython_cmd=")) {
+                cpython_cmd_pos = i;
+                System.setProperty("cpython_cmd", args[i].substring(16));
+                n--;
+                break;
+            }
+        }
+
         argv = new String[n];
         if (filename != null) {
             argv[0] = filename;
@@ -691,8 +713,17 @@ class CommandLineOptions {
             argv[0] = "";
         }
 
-        for (int i = 1; i < n; i++, index++) {
-            argv[i] = args[index];
+        if (cpython_cmd_pos == -1) {
+            for (int i = 1; i < n; i++, index++) {
+                argv[i] = args[index];
+            }
+        } else {
+            for (int i = 1; i < n; i++, index++) {
+                if (index == cpython_cmd_pos) {
+                    index++;
+                }
+                argv[i] = args[index];
+            }
         }
 
         return true;
