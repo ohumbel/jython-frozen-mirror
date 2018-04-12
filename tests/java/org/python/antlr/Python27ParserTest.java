@@ -56,6 +56,25 @@ public class Python27ParserTest {
 		assertParseable(CharStreams.fromString(b.toString()));
 	}
 
+	@Test
+	public void testParseSimpleInput_from_Lib_tkinter_ttk_dot_py() {
+		StringBuilder b = new StringBuilder();
+		// from Lib/tkinter/ttk.py, line 75
+		b.append("def _mapdict_values(items):\n");
+		b.append("    opt_val = []\n");
+		b.append("    for *state, val in items:\n");
+		b.append("        state[0] # raise IndexError if empty\n");
+		b.append("        if len(state) == 1:\n");
+		b.append("            state = state[0] or ''\n");
+		b.append("        else:\n");
+		b.append("            state = ' '.join(state) # raise TypeError if not str\n");
+		b.append("        opt_val.append(state)\n");
+		b.append("        if val is not None:\n");
+		b.append("            opt_val.append(val)\n");
+		b.append("    return opt_val\n");
+		assertParseable(CharStreams.fromString(b.toString()));
+	}
+
 	private static Set<String> loadExpectedFailures() throws IOException {
 		Properties properties = new Properties();
 		Path maxFailures = Paths.get(JYTHON_ROOT, "grammar/CPython27.max.failing.files.properties");

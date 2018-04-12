@@ -44,12 +44,10 @@
  *  - except_clause
  *  - test_nocond                                    (not present in 2.7)
  *  - lambdef_nocond                                 (not present in 2.7)
- *  - star_expr                                      (not present in 2.7)
- *  = atom                                           (listmaker instead of testlist_comp, although present)
- *  = listmaker                                      (not present in 3.3)
+ *  - atom                                           (listmaker instead of testlist_comp, although present)
+ *  - listmaker                                      (not present in 3.3)
  *  - testlist_comp
  *  - subscript
- *  - exprlist
  *  - classdef
  *  - argument                                       (eventually the same)
  *  - list_iter                                      (not present in 3.3)
@@ -64,6 +62,9 @@
  *  + expr_stmt
  *  + raise_stmt
  *  + testlist1                                      (not present in 3.3)
+ *  + star_expr                                      (not present in 2.7)
+ *  + comparison
+ *  + exprlist
  */
    
 grammar Python27;
@@ -524,9 +525,9 @@ not_test
  | comparison
  ;
 
-/// comparison: star_expr (comp_op star_expr)*
+/// comparison: expr (comp_op expr)*
 comparison
- : star_expr ( comp_op star_expr )*
+ : expr ( comp_op expr )*
  ;
 
 /// # <> isn't actually a valid comparison operator in Python. It's here for the
@@ -544,11 +545,6 @@ comp_op
  | NOT IN
  | IS
  | IS NOT
- ;
-
-/// star_expr: ['*'] expr
-star_expr
- : '*'? expr
  ;
 
 /// expr: xor_expr ('|' xor_expr)*
@@ -650,9 +646,9 @@ sliceop
  : ':' test?
  ;
 
-/// exprlist: star_expr (',' star_expr)* [',']
+/// exprlist: expr (',' expr)* [',']
 exprlist
- : star_expr ( ',' star_expr )* ','?
+ : expr ( ',' expr )* ','?
  ;
 
 /// testlist1: test (',' test)*
