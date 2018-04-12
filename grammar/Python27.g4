@@ -44,17 +44,12 @@
  *  - except_clause
  *  - test_nocond                                    (not present in 2.7)
  *  - lambdef_nocond                                 (not present in 2.7)
- *  - atom                                           (listmaker instead of testlist_comp, although present)
- *  - listmaker                                      (not present in 3.3)
- *  - testlist_comp
  *  - subscript
  *  - classdef
  *  - argument                                       (eventually the same)
- *  - list_iter                                      (not present in 3.3)
- *  - list_for                                       (not present in 3.3)
- *  - list_if                                        (not present in 3.3)
  *  - comp_if
  *  - yield_expr
+ *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
  *  + print_stmt                                     (not present in 3.3)
  *  + exec_stmt
@@ -65,6 +60,14 @@
  *  + star_expr                                      (not present in 2.7)
  *  + comparison
  *  + exprlist
+ *  + testlist_comp
+ *  + list_iter                                      (not present in 3.3)
+ *  + list_if                                        (not present in 3.3)
+ *  + old_lambdef                                    (not present in 3.3)
+ *  + old_test                                       (not present in 3.3)
+ *  + testlist_safe                                  (not present in 3.3)
+ *  + list_for                                       (not present in 3.3)
+ *  + listmaker                                      (not present in 3.3)
  */
    
 grammar Python27;
@@ -600,13 +603,16 @@ power
  ;
 
 /// atom: ('(' [yield_expr|testlist_comp] ')' |
-///        '[' [testlist_comp] ']' |
+///        '[' [listmaker] ']' |
 ///        '{' [dictorsetmaker] '}' |
-///        NAME | NUMBER | STRING+ | '...' | 'None' | 'True' | 'False')
+///        '`' testlist1 '`' |
+///        NAME | NUMBER | STRING+)
+/// +++ needs the 4 additional constants '...', NONE, TRUE, FALSE at the moment
 atom
  : '(' ( yield_expr | testlist_comp )? ')' 
- | '[' testlist_comp? ']'  
- | '{' dictorsetmaker? '}' 
+ | '[' listmaker? ']'  
+ | '{' dictorsetmaker? '}'
+ | '`' testlist1 '`' 
  | NAME 
  | number 
  | str+ 
@@ -616,11 +622,58 @@ atom
  | FALSE
  ;
 
+/// list_iter: list_for | list_if
+list_iter
+ : list_for
+   |
+   list_if
+ ;
+
+/// list_for: 'for' exprlist 'in' testlist_safe [list_iter]
+list_for
+ : FOR exprlist IN testlist_safe list_iter?
+ ;
+
+/// list_if: 'if' old_test [list_iter]
+list_if
+ : IF old_test list_iter?
+ ;
+
+/// listmaker: test ( list_for | (',' test)* [','] )
+listmaker
+ : test ( list_for
+          |
+          ( ',' test )* ','? 
+        )  
+ ;
+
 /// testlist_comp: test ( comp_for | (',' test)* [','] )
 testlist_comp
  : test ( comp_for 
         | ( ',' test )* ','? 
         )
+ ;
+
+/// Backward compatibility cruft to support:
+/// [ x for x in lambda: True, lambda: False if x() ]
+/// even while also allowing:
+/// lambda x: 5 if x else 2
+/// (But not a mix of the two)
+/// testlist_safe: old_test [(',' old_test)+ [',']]
+testlist_safe
+ : old_test ( (',' old_test)+ ','? )?
+ ;
+
+/// old_test: or_test | old_lambdef
+old_test
+ : or_test
+ |
+ old_lambdef
+ ;
+
+/// old_lambdef: 'lambda' [varargslist] ':' old_test
+old_lambdef
+ : LAMBDA varargslist? ':' old_test
  ;
 
 /// trailer: '(' [arglist] ')' | '[' subscriptlist ']' | '.' NAME
