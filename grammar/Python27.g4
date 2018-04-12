@@ -45,8 +45,8 @@
  *  - test_nocond                                    (not present in 2.7)
  *  - lambdef_nocond                                 (not present in 2.7)
  *  - star_expr                                      (not present in 2.7)
- *  - atom                                           (listmaker instead of testlist_comp, although present)
- *  - listmaker                                      (not present in 3.3)
+ *  = atom                                           (listmaker instead of testlist_comp, although present)
+ *  = listmaker                                      (not present in 3.3)
  *  - testlist_comp
  *  - subscript
  *  - exprlist
@@ -56,7 +56,6 @@
  *  - list_for                                       (not present in 3.3)
  *  - list_if                                        (not present in 3.3)
  *  - comp_if
- *  - testlist1                                      (not present in 3.3)
  *  - yield_expr
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
  *  + print_stmt                                     (not present in 3.3)
@@ -64,6 +63,7 @@
  *  + nonlocal_stmt                                  (not present in 2.7)
  *  + expr_stmt
  *  + raise_stmt
+ *  + testlist1                                      (not present in 3.3)
  */
    
 grammar Python27;
@@ -655,9 +655,15 @@ exprlist
  : star_expr ( ',' star_expr )* ','?
  ;
 
-/// testlist: test (',' test)* [',']
+/// testlist1: test (',' test)*
+testlist1
+ : test ( ',' test )*
+ ;
+
+/// testlist: test (',' test)* [','] 
+// try to reuse testlist1
 testlist
- : test ( ',' test )* ','?
+ : testlist1 ','?
  ;
 
 /// dictorsetmaker: ( (test ':' test (comp_for | (',' test ':' test)* [','])) |
