@@ -62,7 +62,7 @@
  *  + print_stmt                                     (not present in 3.3)
  *  + exec_stmt
  *  + nonlocal_stmt                                  (not present in 2.7)
- *  = expr_stmt
+ *  + expr_stmt
  *  + raise_stmt
  */
    
@@ -74,7 +74,7 @@ package org.python.antlr;
 }
 
 // All comments that start with "///" are copy-pasted from
-// The Python Language Reference: https://docs.python.org/3.3/reference/grammar.html
+// The Python Language Reference: https://docs.python.org/2.7/reference/grammar.html
 
 tokens { INDENT, DEDENT }
 
@@ -282,12 +282,12 @@ small_stmt
  | assert_stmt
  ;
 
-/// expr_stmt: testlist_star_expr (augassign (yield_expr|testlist) |
-///                      ('=' (yield_expr|testlist_star_expr))*)
+/// expr_stmt: testlist (augassign (yield_expr|testlist) |
+///                      ('=' (yield_expr|testlist))*)
 expr_stmt
- : testlist_star_expr ( augassign ( yield_expr | testlist) 
-                      | ( '=' ( yield_expr| testlist_star_expr ) )*
-                      )
+ : testlist ( augassign ( yield_expr | testlist) 
+            | ( '=' ( yield_expr | testlist ) )*
+            )
  ;           
 
 /// print_stmt: 'print' ( [ test (',' test)* [','] ] |
@@ -296,11 +296,6 @@ print_stmt
  : PRINT ( ( test (',' test)* ','? )?
          | '>>' test ( (',' test)+ ','? )?
          )
- ;
-
-/// testlist_star_expr: (test|star_expr) (',' (test|star_expr))* [',']
-testlist_star_expr
- : ( test | star_expr ) ( ',' ( test |  star_expr ) )* ','?
  ;
 
 /// augassign: ('+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' |
