@@ -40,7 +40,6 @@
  *  - varargslist                                    (fpdef instead of vfpdef)
  *  - fpdef: NAME | '(' fplist ')'
  *  - fplist: fpdef (',' fpdef)* [',']
- *  - except_clause
  *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
  *  + print_stmt                                     (not present in 3.3)
@@ -69,6 +68,7 @@
  *  + yield_arg                                      (not present in 2.7)
  *  + yield_expr
  *  + subscript
+ *  + except_clause
  */
    
 grammar Python27;
