@@ -35,7 +35,6 @@
  * https://docs.python.org/2/reference/grammar.html
  * 
  * This is a list of the differences between the 2.7.13 and the 3.3 specification:
- *  - funcdef: 'def' NAME parameters ':' suite       (no ['->' test])
  *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
  *  + print_stmt                                     (not present in 3.3)
@@ -72,6 +71,7 @@
  *  + typedargslist                                  (not present in 2.7)
  *  + parameters: '(' [varargslist] ')'              (varargslist instead of typedargslist) 
  *  + varargslist                                    (fpdef instead of vfpdef)
+ *  + funcdef                                        (no ['->' test])
  */
    
 grammar Python27;
@@ -221,9 +221,9 @@ decorated
  : decorators ( classdef | funcdef )
  ;
 
-/// funcdef: 'def' NAME parameters ['->' test] ':' suite
+/// funcdef: 'def' NAME parameters ':' suite
 funcdef
- : DEF NAME parameters ( '->' test )? ':' suite
+ : DEF NAME parameters ':' suite
  ;
 
 /// parameters: '(' [varargslist] ')'
