@@ -42,12 +42,9 @@
  *  - fplist: fpdef (',' fpdef)* [',']
  *  - import_from
  *  - except_clause
- *  - test_nocond                                    (not present in 2.7)
- *  - lambdef_nocond                                 (not present in 2.7)
  *  - subscript
  *  - classdef
  *  - argument                                       (eventually the same)
- *  - comp_if
  *  - yield_expr
  *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
@@ -68,6 +65,9 @@
  *  + testlist_safe                                  (not present in 3.3)
  *  + list_for                                       (not present in 3.3)
  *  + listmaker                                      (not present in 3.3)
+ *  + comp_if
+ *  + lambdef_nocond                                 (not present in 2.7)
+ *  + test_nocond                                    (not present in 2.7)
  */
    
 grammar Python27;
@@ -496,20 +496,9 @@ test
  | lambdef
  ;
 
-/// test_nocond: or_test | lambdef_nocond
-test_nocond
- : or_test 
- | lambdef_nocond
- ;
-
 /// lambdef: 'lambda' [varargslist] ':' test
 lambdef
  : LAMBDA varargslist? ':' test
- ;
-
-/// lambdef_nocond: 'lambda' [varargslist] ':' test_nocond
-lambdef_nocond
- : LAMBDA varargslist? ':' test_nocond
  ;
 
 /// or_test: and_test ('or' and_test)*
@@ -760,9 +749,9 @@ comp_for
  : FOR exprlist IN or_test comp_iter?
  ;
 
-/// comp_if: 'if' test_nocond [comp_iter]
+/// comp_if: 'if' old_test [comp_iter]
 comp_if
- : IF test_nocond comp_iter?
+ : IF old_test comp_iter?
  ;
 
 /// yield_expr: 'yield' [testlist]
