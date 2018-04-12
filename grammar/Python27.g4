@@ -42,7 +42,6 @@
  *  - fplist: fpdef (',' fpdef)* [',']
  *  - except_clause
  *  - subscript
- *  - yield_expr
  *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)
  *  + print_stmt                                     (not present in 3.3)
@@ -68,6 +67,8 @@
  *  + argument                                       (eventually the same)
  *  + import_from
  *  + classdef
+ *  + yield_arg                                      (not present in 2.7)
+ *  + yield_expr
  */
    
 grammar Python27;
@@ -756,13 +757,7 @@ comp_if
 
 /// yield_expr: 'yield' [testlist]
 yield_expr
- : YIELD yield_arg?
- ;
-
-/// yield_arg: 'from' test | testlist
-yield_arg
- : FROM test 
- | testlist
+ : YIELD testlist?
  ;
 
 str
