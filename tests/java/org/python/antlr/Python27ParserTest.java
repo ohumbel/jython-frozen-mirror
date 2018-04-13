@@ -49,10 +49,8 @@ public class Python27ParserTest {
 	@Test
 	public void testParseSimpleInput() {
 		StringBuilder b = new StringBuilder();
-		b.append("def _execvpe(file, args, env=None):\n");
-		b.append("    if saved_exc:\n");
-		b.append("        raise error, saved_exc, saved_tb\n");
-		b.append("    raise error, e, tb\n");
+		b.append("def test():\n");
+		b.append("    d = Dbm('@dbm', 'rw', 0600)\n");
 		assertParseable(CharStreams.fromString(b.toString()));
 	}
 
