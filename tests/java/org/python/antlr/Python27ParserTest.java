@@ -189,7 +189,14 @@ public class Python27ParserTest {
 			|| name.endsWith("/Tools/scripts/byext.py")
 			|| name.endsWith("/Tools/scripts/pindent.py ")
 			|| name.endsWith("/Lib/test/pythoninfo.py")
-			|| name.endsWith("/Lib/test/bisect.py");
+			|| name.endsWith("/Lib/test/bisect.py")
+			|| name.endsWith("/Tools/ssl/multissltests.py")
+			|| name.endsWith("/Tools/scripts/pindent.py")
+			|| name.endsWith("/Lib/test/test_regrtest.py")
+			|| name.endsWith("/Lib/test/test_future5.py")
+			|| name.endsWith("/Lib/ensurepip/__init__.py")
+			|| name.endsWith("/Lib/idlelib/PyShell.py")
+			|| name.endsWith("/Lib/idlelib/configHandler.py");
 		}
 
 		private boolean bad_syntax(String name) {
