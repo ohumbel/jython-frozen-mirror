@@ -58,6 +58,9 @@ public class Python27ParserTest {
 		b.append("        self.assertEqual(unicode(obj), unicode(str(obj)))\n");
 		b.append("    self.crc = zlib.crc32('') & 0xffffffffL\n");
 		b.append("    os.chmod(tempname, statbuf[ST_MODE] & 07777)\n");
+		b.append("    self.assertEqual(2147483647, 017777777777)\n");
+		b.append("    self.assertEqual(2147483647, 0o17777777777)\n");
+
 		assertParseable(CharStreams.fromString(b.toString()));
 	}
 
@@ -165,8 +168,7 @@ public class Python27ParserTest {
 			if (attr.isRegularFile() && fileName.endsWith(".py")) {
 				canParse = true;
 				// and now all the exclusions:
-				if (is_not_a_pure_2_nor_3_grammar(fileName) || print_is_not_a_function(fileName) || bad_syntax(fileName)
-						|| not_sure_whats_wrong(fileName)) {
+				if (is_not_a_pure_2_nor_3_grammar(fileName) || print_is_already_a_function(fileName) || bad_syntax(fileName)) {
 					canParse = false;
 				}
 			}
@@ -177,22 +179,16 @@ public class Python27ParserTest {
 			return name.contains("/test2to3/") || name.contains("/lib2to3/");
 		}
 
-		private boolean print_is_not_a_function(String name) {
-			return false; // for 2.7
-			// return name.endsWith("/PC/VC6/rmpyc.py") ||
-			// name.endsWith("/PC/VS7.1/build_ssl.py")
-			// || name.endsWith("/PC/VS7.1/field3.py") ||
-			// name.endsWith("/PC/VS7.1/rmpyc.py")
-			// || name.endsWith("/Tools/msi/msilib.py");
+		private boolean print_is_already_a_function(String name) {
+			return name.endsWith("/Tools/ccbench/ccbench.py")
+			|| name.endsWith("/Tools/scripts/byext.py")
+			|| name.endsWith("/Tools/scripts/pindent.py ")
+			|| name.endsWith("/Lib/test/pythoninfo.py")
+			|| name.endsWith("/Lib/test/bisect.py");
 		}
 
 		private boolean bad_syntax(String name) {
-			return name.endsWith("/Lib/test/bad_coding2.py") || name.endsWith("/Misc/Vim/syntax_test.py");
-		}
-
-		private boolean not_sure_whats_wrong(String name) {
-			// a re.compile() statment fails to parse:
-			return name.endsWith("/Tools/scripts/findnocoding.py");
+			return name.endsWith("/Lib/test/bad_coding2.py");
 		}
 	}
 
