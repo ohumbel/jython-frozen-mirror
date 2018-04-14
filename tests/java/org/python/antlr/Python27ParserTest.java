@@ -36,6 +36,7 @@ public class Python27ParserTest {
 	}
 
 	@Test
+	//@Ignore
 	public void testParseWholePython27Library() throws IOException {
 		parseDirectory(CPYTHON_ROOT, loadExpectedFailures());
 	}
@@ -51,6 +52,11 @@ public class Python27ParserTest {
 		StringBuilder b = new StringBuilder();
 		b.append("def test():\n");
 		b.append("    d = Dbm('@dbm', 'rw', 0600)\n");
+		b.append("    for obj in (123, 123.45, 123L):\n");
+		b.append("        self.assertEqual(unicode(obj), unicode(str(obj)))\n");
+		b.append("    for obj in (123, 123.45, 123l):\n");
+		b.append("        self.assertEqual(unicode(obj), unicode(str(obj)))\n");
+		b.append("    self.crc = zlib.crc32('') & 0xffffffffL\n");
 		assertParseable(CharStreams.fromString(b.toString()));
 	}
 

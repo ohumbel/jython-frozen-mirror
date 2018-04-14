@@ -869,9 +869,10 @@ BYTES_LITERAL
  ;
 
 /// decimalinteger ::=  nonzerodigit digit* | "0"+
+// allow an optional long marker at the end
 DECIMAL_INTEGER
- : NON_ZERO_DIGIT DIGIT*
- | '0'+
+ : NON_ZERO_DIGIT DIGIT* LONG_MARK?
+ | '0'+ LONG_MARK?
  ;
 
 /// octinteger     ::=  "0" ("o" | "O") octdigit+
@@ -901,6 +902,10 @@ FLOAT_NUMBER
 /// imagnumber ::=  (floatnumber | intpart) ("j" | "J")
 IMAG_NUMBER
  : ( FLOAT_NUMBER | INT_PART ) [jJ]
+ ;
+
+LONG_MARK
+ : [lL]
  ;
 
 DOT : '.';
@@ -1009,8 +1014,9 @@ fragment OCT_DIGIT
  ;
 
 /// hexdigit       ::=  digit | "a"..."f" | "A"..."F"
+// allow an optional long mark at the end
 fragment HEX_DIGIT
- : [0-9a-fA-F]
+ : [0-9a-fA-F] LONG_MARK?
  ;
 
 /// bindigit       ::=  "0" | "1"
