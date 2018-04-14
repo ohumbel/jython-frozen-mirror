@@ -876,11 +876,11 @@ DECIMAL_INTEGER
  ;
 
 /// octinteger     ::=  "0" ("o" | "O") octdigit+
-// or a file mode like 0600, 755, 777,  7777, 07777
+// or a file mode like 0600, 755, 777,  7777, 07777, or even longer octal digits
 OCT_INTEGER
  : '0' [oO] OCT_DIGIT+
  |
- OCT_DIGIT+
+ OCT_DIGIT+ LONG_MARK?
  ;
 
 /// hexinteger     ::=  "0" ("x" | "X") hexdigit+

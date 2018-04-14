@@ -60,6 +60,11 @@ public class Python27ParserTest {
 		b.append("    os.chmod(tempname, statbuf[ST_MODE] & 07777)\n");
 		b.append("    self.assertEqual(2147483647, 017777777777)\n");
 		b.append("    self.assertEqual(2147483647, 0o17777777777)\n");
+		b.append("    x = 077777777777777777L\n");
+		b.append("    x = 077777777777777777l\n");
+		b.append("    big = 012345670123456701234567012345670L  # 32 octal digits\n");
+		b.append("    tarinfo.uid = 04000000000000000000L\n");
+
 
 		assertParseable(CharStreams.fromString(b.toString()));
 	}
