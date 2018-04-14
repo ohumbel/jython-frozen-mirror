@@ -57,6 +57,7 @@ public class Python27ParserTest {
 		b.append("    for obj in (123, 123.45, 123l):\n");
 		b.append("        self.assertEqual(unicode(obj), unicode(str(obj)))\n");
 		b.append("    self.crc = zlib.crc32('') & 0xffffffffL\n");
+		b.append("    os.chmod(tempname, statbuf[ST_MODE] & 07777)\n");
 		assertParseable(CharStreams.fromString(b.toString()));
 	}
 
