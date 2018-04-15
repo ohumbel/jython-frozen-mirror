@@ -34,6 +34,10 @@
  * The rules are adapted from the official Python 2.7.13 grammar:
  * https://docs.python.org/2/reference/grammar.html
  * 
+ * Open:
+ *  - a missing newline at the end of a stream leads to "no viable alternative at input '<EOF>'"
+ *  - from __future__ import
+ *
  * This is a list of the differences between the 2.7.13 and the 3.3 specification:
  *  = atom                                           (listmaker instead of testlist_comp, although present, pending: 4 additional constants)
  *  + small_stmt:                                    (print_stmt, exec_stmt, but no nonlocal_stmt)

@@ -30,9 +30,9 @@ public class Python27ParserTest {
 	private static final String JYTHON_ROOT = "/Users/oti/stuff/gitrepo/ohumbel/jythontools/jython";
 
 	@Test
-	@Ignore
+	//@Ignore
 	public void testParseSingleFile() throws FileNotFoundException {
-		Path file = Paths.get(JYTHON_ROOT, "lib-python/2.7/test/test_io.py");
+		Path file = Paths.get(JYTHON_ROOT, "bugtests/test394jar/test394called.py");
 		assertParseable(file);
 	}
 

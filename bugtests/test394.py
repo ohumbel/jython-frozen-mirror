@@ -43,8 +43,8 @@ def checkTestDir():
   manifestFileName = TESTDIR + "/" + MANIFEST
   if not os.path.exists(manifestFileName):
     raise AssertionError, manifestFileName + " does not exist"
-                        
-  
+
+
 # create a jython standalone jar file:
 # add the contents of jython-dev.jar and /Lib files to a new jython-dev.jar
 def mkJythonJar():
@@ -54,7 +54,7 @@ def mkJythonJar():
   jarPacker.addDirectory(File(cfg.jython_home + "/Lib"))
   jarPacker.close()
   return jarFile
-  
+
 # make a java class calling jython main
 def mkJavaClass():
   support.compileJava("%s/%s.java" % (TESTDIR, CLAZZ))
@@ -67,8 +67,8 @@ def mkRunJar():
   jarPacker.addManifestFile(manifestFile)
   jarPacker.addFile(File(TESTDIR, CLAZZ+".class"), TESTDIR)
   jarPacker.close()
-                       
-                    
+
+
 
 checkTestDir()
 mkJythonJar()

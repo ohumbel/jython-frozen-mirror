@@ -19,7 +19,7 @@ def checkTestDir():
     raise AssertionError, TESTDIR + " does not exist"
   if not os.path.exists(TEST_PY_NAME):
     raise AssertionError, TEST_PY_NAME + " does not exist"
-    
+
 # create a jython standalone jar file:
 # add the contents of jython-dev.jar and /Lib files to a new jython-dev.jar
 def mkjar():
