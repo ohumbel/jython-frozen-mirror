@@ -36,7 +36,7 @@ public class Python27ParserTest {
 	}
 
 	@Test
-	//@Ignore
+	// @Ignore
 	public void testParseWholePython27Library() throws IOException {
 		parseDirectory(CPYTHON_ROOT, loadExpectedFailures());
 	}
@@ -64,28 +64,29 @@ public class Python27ParserTest {
 		b.append("    x = 077777777777777777l\n");
 		b.append("    big = 012345670123456701234567012345670L  # 32 octal digits\n");
 		b.append("    tarinfo.uid = 04000000000000000000L\n");
-
-
 		assertParseable(CharStreams.fromString(b.toString()));
 	}
 
 	@Test
-	public void testParseSimpleInput_from_Lib_tkinter_ttk_dot_py() {
-		StringBuilder b = new StringBuilder();
-		// from Lib/tkinter/ttk.py, line 75
-		b.append("def _mapdict_values(items):\n");
-		b.append("    opt_val = []\n");
-		b.append("    for *state, val in items:\n");
-		b.append("        state[0] # raise IndexError if empty\n");
-		b.append("        if len(state) == 1:\n");
-		b.append("            state = state[0] or ''\n");
-		b.append("        else:\n");
-		b.append("            state = ' '.join(state) # raise TypeError if not str\n");
-		b.append("        opt_val.append(state)\n");
-		b.append("        if val is not None:\n");
-		b.append("            opt_val.append(val)\n");
-		b.append("    return opt_val\n");
-		assertParseable(CharStreams.fromString(b.toString()));
+	public void testInvalidInput() {
+		StringBuilder b;
+
+		b = new StringBuilder();
+		// the '*' as single argument is not allowed
+		b.append("def fetch_zip(commit_hash, zip_dir, *, org='python', binary=False, verbose):\n");
+		b.append("    pass\n");
+		assertNotParseable(b);
+
+		b = new StringBuilder();
+		// the '*' in front of state is not allowed
+		b.append("for *state, val in items:\n");
+		b.append("    pass\n");
+		assertNotParseable(b);
+
+		b = new StringBuilder();
+		// the '.False' is unknown at the moment (test_xmlrpclib.py)
+		b.append("b = xmlrpclib.False\n");
+		assertNotParseable(b);
 	}
 
 	private static Set<String> loadExpectedFailures() throws IOException {
@@ -143,6 +144,14 @@ public class Python27ParserTest {
 		assertNotNull(tree);
 	}
 
+	private static void assertNotParseable(StringBuilder builder) {
+		try {
+			assertParseable(CharStreams.fromString(builder.toString()));
+			fail("RuntimeException expected");
+		} catch (RuntimeException e) { // expected
+		}
+	}
+
 	private static final class ParseFiles extends SimpleFileVisitor<Path> {
 		private final List<String> failedFiles = new ArrayList<>();
 
@@ -173,7 +182,8 @@ public class Python27ParserTest {
 			if (attr.isRegularFile() && fileName.endsWith(".py")) {
 				canParse = true;
 				// and now all the exclusions:
-				if (is_not_a_pure_2_nor_3_grammar(fileName) || print_is_already_a_function(fileName) || bad_syntax(fileName)) {
+				if (is_not_a_pure_2_nor_3_grammar(fileName) || print_is_already_a_function(fileName)
+						|| star_args(fileName) || bad_syntax(fileName) || unknown(fileName)) {
 					canParse = false;
 				}
 			}
@@ -184,23 +194,32 @@ public class Python27ParserTest {
 			return name.contains("/test2to3/") || name.contains("/lib2to3/");
 		}
 
+		/**
+		 * But what about {@code from __future__ import print_function} ?
+		 */
 		private boolean print_is_already_a_function(String name) {
-			return name.endsWith("/Tools/ccbench/ccbench.py")
-			|| name.endsWith("/Tools/scripts/byext.py")
-			|| name.endsWith("/Tools/scripts/pindent.py ")
-			|| name.endsWith("/Lib/test/pythoninfo.py")
-			|| name.endsWith("/Lib/test/bisect.py")
-			|| name.endsWith("/Tools/ssl/multissltests.py")
-			|| name.endsWith("/Tools/scripts/pindent.py")
-			|| name.endsWith("/Lib/test/test_regrtest.py")
-			|| name.endsWith("/Lib/test/test_future5.py")
-			|| name.endsWith("/Lib/ensurepip/__init__.py")
-			|| name.endsWith("/Lib/idlelib/PyShell.py")
-			|| name.endsWith("/Lib/idlelib/configHandler.py");
+			return name.endsWith("/Tools/ccbench/ccbench.py") || name.endsWith("/Tools/scripts/byext.py")
+					|| name.endsWith("/Tools/scripts/pindent.py ") || name.endsWith("/Lib/test/pythoninfo.py")
+					|| name.endsWith("/Lib/test/bisect.py") || name.endsWith("/Tools/ssl/multissltests.py")
+					|| name.endsWith("/Tools/scripts/pindent.py") || name.endsWith("/Lib/test/test_regrtest.py")
+					|| name.endsWith("/Lib/test/test_future5.py") || name.endsWith("/Lib/ensurepip/__init__.py")
+					|| name.endsWith("/Lib/idlelib/PyShell.py") || name.endsWith("/Lib/idlelib/configHandler.py")
+					|| name.endsWith("/Lib/test/test_print.py");
+		}
+
+		private boolean star_args(String name) {
+			// invalid syntax (* as function def argument / * in front of a function def
+			// argument)
+			// with Python 2.7.2 -> check with 2.7.14 again
+			return name.endsWith("/PCbuild/get_external.py") || name.endsWith("/Lib/tkinter/ttk.py");
 		}
 
 		private boolean bad_syntax(String name) {
-			return name.endsWith("/Lib/test/bad_coding2.py");
+			return name.endsWith("/Lib/test/bad_coding2.py") || name.endsWith("/Lib/test/bad_coding3.py");
+		}
+
+		private boolean unknown(String name) {
+			return name.endsWith("/Lib/test/test_xmlrpc.py");
 		}
 	}
 
