@@ -30,21 +30,22 @@ public class Python27ParserTest {
 	private static final String JYTHON_ROOT = "/Users/oti/stuff/gitrepo/ohumbel/jythontools/jython";
 
 	@Test
+	@Ignore
 	public void testParseSingleFile() throws FileNotFoundException {
-		Path file = Paths.get(CPYTHON_ROOT, "Lib/timeit.py");
+		Path file = Paths.get(JYTHON_ROOT, "lib-python/2.7/test/test_io.py");
 		assertParseable(file);
 	}
 
 	@Test
-	// @Ignore
-	public void testParseWholePython27Library() throws IOException {
-		parseDirectory(CPYTHON_ROOT, loadExpectedFailures());
+	@Ignore
+	public void testParseWholeCPython27Library() throws IOException {
+		parseDirectory(CPYTHON_ROOT, loadExpectedFailures("CPython27.max.failing.files.properties"));
 	}
 
 	@Test
-	@Ignore
+	//@Ignore
 	public void testParseWholeJython27Library() throws IOException {
-		parseDirectory(JYTHON_ROOT, loadExpectedFailures());
+		parseDirectory(JYTHON_ROOT, loadExpectedFailures("Jython27.max.failing.files.properties"));
 	}
 
 	@Test
@@ -89,9 +90,9 @@ public class Python27ParserTest {
 		assertNotParseable(b);
 	}
 
-	private static Set<String> loadExpectedFailures() throws IOException {
+	private static Set<String> loadExpectedFailures(String failurePropertiesFileName) throws IOException {
 		Properties properties = new Properties();
-		Path maxFailures = Paths.get(JYTHON_ROOT, "grammar/CPython27.max.failing.files.properties");
+		Path maxFailures = Paths.get(JYTHON_ROOT, "grammar/".concat(failurePropertiesFileName));
 		try (InputStream inputStream = Files.newInputStream(maxFailures)) {
 			properties.load(inputStream);
 		}
@@ -183,7 +184,8 @@ public class Python27ParserTest {
 				canParse = true;
 				// and now all the exclusions:
 				if (is_not_a_pure_2_nor_3_grammar(fileName) || print_is_already_a_function(fileName)
-						|| star_args(fileName) || bad_syntax(fileName) || unknown(fileName)) {
+						|| star_args(fileName) || bad_syntax(fileName) || unknown(fileName)
+						|| isBuildOutput(fileName)) {
 					canParse = false;
 				}
 			}
@@ -199,27 +201,32 @@ public class Python27ParserTest {
 		 */
 		private boolean print_is_already_a_function(String name) {
 			return name.endsWith("/Tools/ccbench/ccbench.py") || name.endsWith("/Tools/scripts/byext.py")
-					|| name.endsWith("/Tools/scripts/pindent.py ") || name.endsWith("/Lib/test/pythoninfo.py")
-					|| name.endsWith("/Lib/test/bisect.py") || name.endsWith("/Tools/ssl/multissltests.py")
-					|| name.endsWith("/Tools/scripts/pindent.py") || name.endsWith("/Lib/test/test_regrtest.py")
-					|| name.endsWith("/Lib/test/test_future5.py") || name.endsWith("/Lib/ensurepip/__init__.py")
-					|| name.endsWith("/Lib/idlelib/PyShell.py") || name.endsWith("/Lib/idlelib/configHandler.py")
-					|| name.endsWith("/Lib/test/test_print.py");
+					|| name.endsWith("/Tools/scripts/pindent.py ") || name.endsWith("/test/pythoninfo.py")
+					|| name.endsWith("/test/bisect.py") || name.endsWith("/Tools/ssl/multissltests.py")
+					|| name.endsWith("/Tools/scripts/pindent.py") || name.endsWith("/test/test_regrtest.py")
+					|| name.endsWith("/test/test_future5.py") || name.endsWith("/ensurepip/__init__.py")
+					|| name.endsWith("/idlelib/PyShell.py") || name.endsWith("/idlelib/configHandler.py")
+					|| name.endsWith("/test/test_print.py") || name.endsWith("lib-python/2.7/test/test_file.py")
+					|| name.endsWith("lib-python/2.7/test/test_io.py");
 		}
 
 		private boolean star_args(String name) {
 			// invalid syntax (* as function def argument / * in front of a function def
 			// argument)
 			// with Python 2.7.2 -> check with 2.7.14 again
-			return name.endsWith("/PCbuild/get_external.py") || name.endsWith("/Lib/tkinter/ttk.py");
+			return name.endsWith("/PCbuild/get_external.py") || name.endsWith("/tkinter/ttk.py");
 		}
 
 		private boolean bad_syntax(String name) {
-			return name.endsWith("/Lib/test/bad_coding2.py") || name.endsWith("/Lib/test/bad_coding3.py");
+			return name.endsWith("/test/bad_coding2.py") || name.endsWith("/test/bad_coding3.py");
 		}
 
 		private boolean unknown(String name) {
-			return name.endsWith("/Lib/test/test_xmlrpc.py");
+			return name.endsWith("/test/test_xmlrpc.py");
+		}
+
+		private boolean isBuildOutput(String name) {
+			return name.contains("build/classes/");
 		}
 	}
 
