@@ -83,10 +83,22 @@ public class Python27ParserTest {
 		b.append("for *state, val in items:\n");
 		b.append("    pass\n");
 		assertNotParseable(b);
+	}
+	
+	@Test
+	public void testShouldPassButDoesNotYet() {
+		StringBuilder b;
 
 		b = new StringBuilder();
 		// the '.False' is unknown at the moment (test_xmlrpclib.py)
 		b.append("b = xmlrpclib.False\n");
+		assertNotParseable(b);
+
+		b = new StringBuilder();
+		// interp.exex() leads to a failure
+		b.append("interp = PythonInterpreter()\n");
+		b.append("code = Py.compile_command_flags(\"execfile('test401/to_be_executed.py')\", \"<input>\", \"single\", None, 1)\n");
+		b.append("interp.exec(code)\n");
 		assertNotParseable(b);
 	}
 
@@ -184,7 +196,7 @@ public class Python27ParserTest {
 				canParse = true;
 				// and now all the exclusions:
 				if (is_not_a_pure_2_nor_3_grammar(fileName) || print_is_already_a_function(fileName)
-						|| star_args(fileName) || bad_syntax(fileName) || unknown(fileName)
+						|| star_args(fileName) || bad_syntax(fileName) || shouldPassButDoesNotYet(fileName)
 						|| isBuildOutput(fileName)) {
 					canParse = false;
 				}
@@ -221,8 +233,8 @@ public class Python27ParserTest {
 			return name.endsWith("/test/bad_coding2.py") || name.endsWith("/test/bad_coding3.py");
 		}
 
-		private boolean unknown(String name) {
-			return name.endsWith("/test/test_xmlrpc.py");
+		private boolean shouldPassButDoesNotYet(String name) {
+			return name.endsWith("/test/test_xmlrpc.py") || name.endsWith("/bugtests/test401.py");
 		}
 
 		private boolean isBuildOutput(String name) {

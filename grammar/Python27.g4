@@ -36,6 +36,8 @@
  * 
  * Open:
  *  - a missing newline at the end of a stream leads to "no viable alternative at input '<EOF>'"
+ *  - pythonInterpreter.exec(code)                   keyword?
+ *  - xmlrpclib.False                                keyword?
  *  - from __future__ import
  *
  * This is a list of the differences between the 2.7.13 and the 3.3 specification:
