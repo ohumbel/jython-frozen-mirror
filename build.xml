@@ -154,19 +154,19 @@ oracle.jar=C:/workspace/HEAD/for_development/bisdevsrv28/jboss/server/infra/lib/
             <pathelement path="${extlibs.dir}/asm-util-5.2.jar" />
             <pathelement path="${extlibs.dir}/guava-22.0-android.jar" />
             <pathelement path="${extlibs.dir}/icu4j-59_1.jar" />
-            <pathelement path="${extlibs.dir}/jffi-1.2.15.jar"/>
+            <pathelement path="${extlibs.dir}/jffi-1.2.16.jar"/>
             <pathelement path="${extlibs.dir}/java-sizeof-0.0.5.jar"/>
-            <pathelement path="${extlibs.dir}/jnr-ffi-2.1.5.jar"/>
+            <pathelement path="${extlibs.dir}/jnr-ffi-2.1.7.jar"/>
             <pathelement path="${extlibs.dir}/jnr-netdb-1.1.6.jar"/>
-            <pathelement path="${extlibs.dir}/jnr-posix-3.0.41.jar"/>
+            <pathelement path="${extlibs.dir}/jnr-posix-3.0.44.jar"/>
             <pathelement path="${extlibs.dir}/jnr-constants-0.9.9.jar"/>
             <pathelement path="${extlibs.dir}/jline-2.14.5.jar"/>
-            <pathelement path="${extlibs.dir}/netty-buffer-4.1.11.Final.jar"/>
-            <pathelement path="${extlibs.dir}/netty-codec-4.1.11.Final.jar"/>
-            <pathelement path="${extlibs.dir}/netty-common-4.1.11.Final.jar"/>
-            <pathelement path="${extlibs.dir}/netty-handler-4.1.11.Final.jar"/>
-            <pathelement path="${extlibs.dir}/netty-resolver-4.1.11.Final.jar"/>
-            <pathelement path="${extlibs.dir}/netty-transport-4.1.11.Final.jar"/>
+            <pathelement path="${extlibs.dir}/netty-buffer-4.1.24.Final.jar"/>
+            <pathelement path="${extlibs.dir}/netty-codec-4.1.24.Final.jar"/>
+            <pathelement path="${extlibs.dir}/netty-common-4.1.24.Final.jar"/>
+            <pathelement path="${extlibs.dir}/netty-handler-4.1.24.Final.jar"/>
+            <pathelement path="${extlibs.dir}/netty-resolver-4.1.24.Final.jar"/>
+            <pathelement path="${extlibs.dir}/netty-transport-4.1.24.Final.jar"/>
         </path>
 
         <available property="informix.present" classname="com.informix.jdbc.IfxDriver" classpath="${informix.jar}" />
@@ -566,17 +566,17 @@ The readme text for the next release will be like:
             <rule pattern="com.google.**" result="org.python.google.@1"/>
             <zipfileset src="extlibs/icu4j-59_1.jar"/>
             <rule pattern="com.ibm.icu.**" result="org.python.icu.@1"/>
-            <zipfileset src="extlibs/netty-buffer-4.1.11.Final.jar" excludes="META-INF/**"/>
+            <zipfileset src="extlibs/netty-buffer-4.1.24.Final.jar" excludes="META-INF/**"/>
             <rule pattern="io.netty.**" result="org.python.netty.@1"/>
-            <zipfileset src="extlibs/netty-codec-4.1.11.Final.jar" excludes="META-INF/**"/>
+            <zipfileset src="extlibs/netty-codec-4.1.24.Final.jar" excludes="META-INF/**"/>
             <rule pattern="io.netty.**" result="org.python.netty.@1"/>
-            <zipfileset src="extlibs/netty-common-4.1.11.Final.jar" excludes="META-INF/**"/>
+            <zipfileset src="extlibs/netty-common-4.1.24.Final.jar" excludes="META-INF/**"/>
             <rule pattern="io.netty.**" result="org.python.netty.@1"/>
-            <zipfileset src="extlibs/netty-handler-4.1.11.Final.jar" excludes="META-INF/**"/>
+            <zipfileset src="extlibs/netty-handler-4.1.24.Final.jar" excludes="META-INF/**"/>
             <rule pattern="io.netty.**" result="org.python.netty.@1"/>
-            <zipfileset src="extlibs/netty-resolver-4.1.11.Final.jar" excludes="META-INF/**"/>
+            <zipfileset src="extlibs/netty-resolver-4.1.24.Final.jar" excludes="META-INF/**"/>
             <rule pattern="io.netty.**" result="org.python.netty.@1"/>
-            <zipfileset src="extlibs/netty-transport-4.1.11.Final.jar" excludes="META-INF/**"/>
+            <zipfileset src="extlibs/netty-transport-4.1.24.Final.jar" excludes="META-INF/**"/>
             <rule pattern="io.netty.**" result="org.python.netty.@1"/>
             <zipfileset src="${extlibs.dir}/java-sizeof-0.0.5.jar"/>
             <rule pattern="com.carrotsearch.sizeof.**" result="org.python.sizeof.@1"/>
@@ -603,10 +603,10 @@ The readme text for the next release will be like:
             <zipfileset src="extlibs/jffi-x86_64-SunOS.jar"/>
             <zipfileset src="extlibs/jffi-x86_64-Windows.jar"/>
             <!-- remainder of JNR, JFFI -->
-            <zipfileset src="extlibs/jffi-1.2.15.jar"/>
-            <zipfileset src="${extlibs.dir}/jnr-ffi-2.1.5.jar"/>
+            <zipfileset src="extlibs/jffi-1.2.16.jar"/>
+            <zipfileset src="${extlibs.dir}/jnr-ffi-2.1.7.jar"/>
             <zipfileset src="${extlibs.dir}/jnr-netdb-1.1.6.jar"/>
-            <zipfileset src="${extlibs.dir}/jnr-posix-3.0.41.jar"/>
+            <zipfileset src="${extlibs.dir}/jnr-posix-3.0.44.jar"/>
             <zipfileset src="${extlibs.dir}/jnr-constants-0.9.9.jar"/>
             <zipfileset src="extlibs/xercesImpl-2.11.0.jar" excludes="META-INF/services/*"/>
             <rule pattern="org.apache.xml.**" result="org.python.apache.xml.@1"/>
