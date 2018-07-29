@@ -39,6 +39,7 @@ build2
 cachedir
 dist
 target
+full_build
 
 profile.txt
 
