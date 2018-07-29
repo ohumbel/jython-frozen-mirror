@@ -31,11 +31,11 @@
 	<classpathentry kind="lib" path="extlibs/jffi-x86_64-Linux.jar"/>
 	<classpathentry kind="lib" path="extlibs/jffi-x86_64-OpenBSD.jar"/>
 	<classpathentry kind="lib" path="extlibs/jffi-x86_64-SunOS.jar"/>
-	<classpathentry kind="lib" path="extlibs/jffi-1.2.15.jar"/>
-	<classpathentry kind="lib" path="extlibs/jnr-posix-3.0.41.jar"/>
+	<classpathentry kind="lib" path="extlibs/jffi-1.2.16.jar"/>
+	<classpathentry kind="lib" path="extlibs/jnr-posix-3.0.44.jar"/>
 	<classpathentry kind="lib" path="extlibs/guava-22.0-android.jar"/>
 	<classpathentry kind="lib" path="extlibs/jnr-constants-0.9.9.jar"/>
-	<classpathentry kind="lib" path="extlibs/jnr-ffi-2.1.5.jar"/>
+	<classpathentry kind="lib" path="extlibs/jnr-ffi-2.1.7.jar"/>
 	<classpathentry kind="lib" path="extlibs/jnr-netdb-1.1.6.jar"/>
 	<classpathentry kind="lib" path="extlibs/commons-compress-1.14.jar"/>
 	<classpathentry kind="lib" path="extlibs/non-distributable/ant-1.10.0.jar"/>
