@@ -13,7 +13,6 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
 import java.security.AccessControlException;
@@ -32,8 +31,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-import jnr.posix.util.Platform;
-import com.carrotsearch.sizeof.RamUsageEstimator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.python.Version;
 import org.python.core.adapter.ClassicPyObjectAdapter;
@@ -43,16 +42,19 @@ import org.python.core.packagecache.SysPackageManager;
 import org.python.expose.ExposedGet;
 import org.python.expose.ExposedType;
 import org.python.modules.Setup;
-import org.python.util.ConsoleEncoding;
 import org.python.util.Generic;
+
+import com.carrotsearch.sizeof.RamUsageEstimator;
+
+import jnr.posix.util.Platform;
 
 /**
  * The "sys" module.
  */
 // xxx Many have lamented, this should really be a module!
 // but it will require some refactoring to see this wish come true.
-public class PySystemState extends PyObject implements AutoCloseable,
-        ClassDictInit, Closeable, Traverseproc {
+public class PySystemState extends PyObject
+        implements AutoCloseable, ClassDictInit, Closeable, Traverseproc {
 
     public static final String PYTHON_CACHEDIR = "python.cachedir";
     public static final String PYTHON_CACHEDIR_SKIP = "python.cachedir.skip";
@@ -66,8 +68,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
 
     public static final PyString version = new PyString(Version.getVersion());
 
-    public static final PyTuple subversion = new PyTuple(new PyString("Jython"), Py.newString(""),
-            Py.newString(""));
+    public static final PyTuple subversion =
+            new PyTuple(new PyString("Jython"), Py.newString(""), Py.newString(""));
 
     public static final int hexversion = ((Version.PY_MAJOR_VERSION << 24)
             | (Version.PY_MINOR_VERSION << 16) | (Version.PY_MICRO_VERSION << 8)
@@ -90,22 +92,21 @@ public class PySystemState extends PyObject implements AutoCloseable,
 
     public final static Class flags = Options.class;
 
-    public final static PyTuple _mercurial = new PyTuple(
-            Py.newString("Jython"),
-            Py.newString(Version.getHGIdentifier()),
-            Py.newString(Version.getHGVersion()));
+    public final static PyTuple _mercurial = new PyTuple(Py.newString("Jython"),
+            Py.newString(Version.getHGIdentifier()), Py.newString(Version.getHGVersion()));
     /**
      * The copyright notice for this release.
      */
 
-    public static final PyObject copyright = Py.newString(
-            "Copyright (c) 2000-2017 Jython Developers.\n" + "All rights reserved.\n\n" +
-            "Copyright (c) 2000 BeOpen.com.\n" + "All Rights Reserved.\n\n" +
-            "Copyright (c) 2000 The Apache Software Foundation.\n" + "All rights reserved.\n\n" +
-            "Copyright (c) 1995-2000 Corporation for National Research Initiatives.\n"
-                + "All Rights Reserved.\n\n" +
-            "Copyright (c) 1991-1995 Stichting Mathematisch Centrum, Amsterdam.\n"
-                + "All Rights Reserved.");
+    public static final PyObject copyright =
+            Py.newString("Copyright (c) 2000-2017 Jython Developers.\n" + "All rights reserved.\n\n"
+                    + "Copyright (c) 2000 BeOpen.com.\n" + "All Rights Reserved.\n\n"
+                    + "Copyright (c) 2000 The Apache Software Foundation.\n"
+                    + "All rights reserved.\n\n"
+                    + "Copyright (c) 1995-2000 Corporation for National Research Initiatives.\n"
+                    + "All Rights Reserved.\n\n"
+                    + "Copyright (c) 1991-1995 Stichting Mathematisch Centrum, Amsterdam.\n"
+                    + "All Rights Reserved.");
 
     private static Map<String, String> builtinNames;
     public static PyTuple builtin_module_names = null;
@@ -214,8 +215,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
         importLock = new ReentrantLock();
         syspathJavaLoader = new SyspathJavaLoader(imp.getParentClassLoader());
 
-        argv = (PyList)defaultArgv.repeat(1);
-        path = (PyList)defaultPath.repeat(1);
+        argv = (PyList) defaultArgv.repeat(1);
+        path = (PyList) defaultPath.repeat(1);
         path.append(Py.newString(JavaImporter.JAVA_IMPORT_PATH_ENTRY));
         path.append(Py.newString(ClasspathPyImporter.PYCLASSPATH_PREFIX));
         executable = defaultExecutable;
@@ -270,39 +271,39 @@ public class PySystemState extends PyObject implements AutoCloseable,
     }
 
     private static void checkReadOnly(String name) {
-        if (name == "__dict__" || name == "__class__" || name == "registry"
-                || name == "exec_prefix" || name == "packageManager") {
+        if (name == "__dict__" || name == "__class__" || name == "registry" || name == "exec_prefix"
+                || name == "packageManager") {
             throw Py.TypeError("readonly attribute");
         }
     }
 
     private static void checkMustExist(String name) {
-        if (name == "__dict__" || name == "__class__" || name == "registry"
-                || name == "exec_prefix" || name == "platform" || name == "packageManager"
-                || name == "builtins" || name == "warnoptions") {
+        if (name == "__dict__" || name == "__class__" || name == "registry" || name == "exec_prefix"
+                || name == "platform" || name == "packageManager" || name == "builtins"
+                || name == "warnoptions") {
             throw Py.TypeError("readonly attribute");
         }
     }
 
     /**
      * Initialise the encoding of <code>sys.stdin</code>, <code>sys.stdout</code>, and
-     * <code>sys.stderr</code>, and their error handling policy, from registry variables.
-     * Under the console app util.jython, values reflect PYTHONIOENCODING if not overridden.
-     * Note that the encoding must name a Python codec, as in <code>codecs.encode()</code>.
+     * <code>sys.stderr</code>, and their error handling policy, from registry variables. Under the
+     * console app util.jython, values reflect PYTHONIOENCODING if not overridden. Note that the
+     * encoding must name a Python codec, as in <code>codecs.encode()</code>.
      */
     private void initEncoding() {
         // Two registry variables, counterparts to PYTHONIOENCODING = [encoding][:errors]
         String encoding = registry.getProperty(PYTHON_IO_ENCODING);
         String errors = registry.getProperty(PYTHON_IO_ERRORS);
 
-        if (encoding==null) {
+        if (encoding == null) {
             // We still don't have an explicit selection for this: match the console.
             encoding = Py.getConsole().getEncoding();
         }
 
-        ((PyFile)stdin).setEncoding(encoding, errors);
-        ((PyFile)stdout).setEncoding(encoding, errors);
-        ((PyFile)stderr).setEncoding(encoding, "backslashreplace");
+        ((PyFile) stdin).setEncoding(encoding, errors);
+        ((PyFile) stdout).setEncoding(encoding, errors);
+        ((PyFile) stderr).setEncoding(encoding, "backslashreplace");
     }
 
     @Deprecated
@@ -481,7 +482,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
         if (ts.tracefunc == null) {
             return Py.None;
         } else {
-            return ((PythonTraceFunction)ts.tracefunc).tracefunc;
+            return ((PythonTraceFunction) ts.tracefunc).tracefunc;
         }
     }
 
@@ -499,7 +500,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
         if (ts.profilefunc == null) {
             return Py.None;
         } else {
-            return ((PythonTraceFunction)ts.profilefunc).tracefunc;
+            return ((PythonTraceFunction) ts.profilefunc).tracefunc;
         }
     }
 
@@ -524,11 +525,14 @@ public class PySystemState extends PyObject implements AutoCloseable,
         return FILE_SYSTEM_ENCODING;
     }
 
-
     /* get and setcheckinterval really do nothing, but it helps when some code tries to use these */
-    public PyInteger getcheckinterval() { return new PyInteger(checkinterval); }
+    public PyInteger getcheckinterval() {
+        return new PyInteger(checkinterval);
+    }
 
-    public void setcheckinterval(int interval) { checkinterval = interval; }
+    public void setcheckinterval(int interval) {
+        checkinterval = interval;
+    }
 
     /**
      * Change the current working directory to the specified path.
@@ -672,8 +676,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
     }
 
     /**
-     * Return the Windows drive letter from the start of the path, upper case, or 0 if
-     * the path does not start X: where X is a letter.
+     * Return the Windows drive letter from the start of the path, upper case, or 0 if the path does
+     * not start X: where X is a letter.
      *
      * @param path to examine
      * @return drive letter or char 0 if no drive letter
@@ -686,13 +690,13 @@ public class PySystemState extends PyObject implements AutoCloseable,
                 return Character.toUpperCase(pathDrive);
             }
         }
-        return (char)0;
+        return (char) 0;
     }
 
     /**
      * Return the Windows UNC share name from the start of the path, or <code>null</code> if the
-     * path is not of Windows UNC type. The path has to be formed with Windows-backslashes:
-     * slashes '/' are not accepted as a substitute here.
+     * path is not of Windows UNC type. The path has to be formed with Windows-backslashes: slashes
+     * '/' are not accepted as a substitute here.
      *
      * @param path to examine
      * @return share name or null
@@ -808,27 +812,61 @@ public class PySystemState extends PyObject implements AutoCloseable,
     }
 
     /**
-     * Emulates CPython's way to name sys.platform.
+     * Emulates CPython's way to name sys.platform. Works according to this table:
+     *
+     * <table>
+     * <tr>
+     * <th style="text-align:left">System</th>
+     * <th style="text-align:left">Value</th>
+     * </tr>
+     * <tr>
+     * <td>Linux (2.x and 3.x)</td>
+     * <td>linux2</td>
+     * </tr>
+     * <tr>
+     * <td>Windows</td>
+     * <td>win32</td>
+     * </tr>
+     * <tr>
+     * <td>Windows/Cygwin</td>
+     * <td>cygwin</td>
+     * </tr>
+     * <tr>
+     * <td>Mac OS X</td>
+     * <td>darwin</td>
+     * </tr>
+     * <tr>
+     * <td>OS/2</td>
+     * <td>os2</td>
+     * </tr>
+     * <tr>
+     * <td>OS/2 EMX</td>
+     * <td>os2emx</td>
+     * </tr>
+     * <tr>
+     * <td>RiscOS</td>
+     * <td>riscos</td>
+     * </tr>
+     * <tr>
+     * <td>AtheOS</td>
+     * <td>atheos</td>
+     * </tr>
+     * </table>
+     *
      */
     public static String getNativePlatform() {
-        /* Works according to this table:
-            System              Value
-            --------------------------
-            Linux (2.x and 3.x) linux2
-            Windows             win32
-            Windows/Cygwin      cygwin
-            Mac OS X            darwin
-            OS/2                os2
-            OS/2 EMX            os2emx
-            RiscOS              riscos
-            AtheOS              atheos
-        */
         String osname = System.getProperty("os.name");
-        if (osname.equals("Linux")) return "linux2";
-        if (osname.equals("Mac OS X")) return "darwin";
-        if (osname.toLowerCase().contains("cygwin")) return "cygwin";
-        if (osname.startsWith("Windows")) return "win32";
-        return osname.replaceAll("[\\s/]", "").toLowerCase();
+        if (osname.equals("Linux")) {
+            return "linux2";
+        } else if (osname.equals("Mac OS X")) {
+            return "darwin";
+        } else if (osname.toLowerCase().contains("cygwin")) {
+            return "cygwin";
+        } else if (osname.startsWith("Windows")) {
+            return "win32";
+        } else {
+            return osname.replaceAll("[\\s/]", "").toLowerCase();
+        }
     }
 
     private static void initRegistry(Properties preProperties, Properties postProperties,
@@ -881,15 +919,12 @@ public class PySystemState extends PyObject implements AutoCloseable,
         }
 
         /*
-         *  The console encoding is the one used by line-editing consoles to decode on the OS side and
-         *  encode on the Python side. It must be a Java codec name, so any relationship to
-         *  python.io.encoding is dubious.
+         * The console encoding is the one used by line-editing consoles to decode on the OS side
+         * and encode on the Python side. It must be a Java codec name, so any relationship to
+         * python.io.encoding is dubious.
          */
         if (!registry.containsKey(PYTHON_CONSOLE_ENCODING)) {
-            String encoding = getPlatformEncoding();
-            if (encoding != null) {
-                registry.put(PYTHON_CONSOLE_ENCODING, encoding);
-            }
+                registry.put(PYTHON_CONSOLE_ENCODING, getConsoleEncoding());
         }
 
         // Set up options from registry
@@ -897,12 +932,43 @@ public class PySystemState extends PyObject implements AutoCloseable,
     }
 
     /**
-     * Return the encoding of the underlying platform, if we can work it out by any means at all.
+     * Try to determine the console encoding from the platform, if necessary using a sub-process to
+     * enquire. If everything fails, assume UTF-8.
      *
-     * @return the encoding of the underlying platform
+     * @return the console encoding (and never {@code null})
      */
-    private static String getPlatformEncoding() {
-        return ConsoleEncoding.get();
+    private static String getConsoleEncoding() {
+
+        // From Java 8 onwards, the answer may already be to hand in the registry:
+        String encoding = System.getProperty("sun.stdout.encoding");
+
+        if (encoding != null) {
+            return encoding;
+
+        } else if (System.getProperty("os.name").startsWith("Windows")) {
+            // Go via the Windows code page built-in command "chcp".
+            String output = getCommandResult("cmd", "/c", "chcp");
+            /*
+             * The output will be like "Active code page: 850" or maybe "Aktive Codepage: 1252." or
+             * "활성 코드 페이지: 949". Assume the first number with 2 or more digits is the code page.
+             */
+            final Pattern DIGITS_PATTERN = Pattern.compile("[1-9]\\d+");
+            Matcher matcher = DIGITS_PATTERN.matcher(output);
+            if (matcher.find()) {
+                return "cp".concat(output.substring(matcher.start(), matcher.end()));
+            }
+
+        } else {
+            // Try a Unix-like "locale charmap".
+            String output = getCommandResult("locale", "charmap");
+            // The result of "locale charmap" is just the charmap name ~ Charset or codec name.
+            if (output.length() > 0) {
+                return output;
+            }
+        }
+
+        // If we land here it is because we found no answer, and we will assume UTF-8.
+        return "utf-8";
     }
 
     /**
@@ -951,7 +1017,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
         initialize(null, null);
     }
 
-    public static synchronized void initialize(Properties preProperties, Properties postProperties) {
+    public static synchronized void initialize(Properties preProperties,
+            Properties postProperties) {
         initialize(preProperties, postProperties, new String[] {""});
     }
 
@@ -979,7 +1046,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
         try {
             ClassLoader context = Thread.currentThread().getContextClassLoader();
             if (context != null) {
-                if (initialize(preProperties, postProperties, argv, classLoader, adapter, context)) {
+                if (initialize(preProperties, postProperties, argv, classLoader, adapter,
+                        context)) {
                     return;
                 }
             } else {
@@ -1024,8 +1092,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
             ClassLoader initializerClassLoader) {
         InputStream in = initializerClassLoader.getResourceAsStream(INITIALIZER_SERVICE);
         if (in == null) {
-            Py.writeDebug("initializer", "'" + INITIALIZER_SERVICE + "' not found on "
-                    + initializerClassLoader);
+            Py.writeDebug("initializer",
+                    "'" + INITIALIZER_SERVICE + "' not found on " + initializerClassLoader);
             return false;
         }
         BufferedReader r = new BufferedReader(new InputStreamReader(in, Charset.forName("UTF-8")));
@@ -1033,8 +1101,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
         try {
             className = r.readLine();
         } catch (IOException e) {
-            Py.writeWarning("initializer", "Failed reading '" + INITIALIZER_SERVICE + "' from "
-                    + initializerClassLoader);
+            Py.writeWarning("initializer",
+                    "Failed reading '" + INITIALIZER_SERVICE + "' from " + initializerClassLoader);
             e.printStackTrace(System.err);
             return false;
         }
@@ -1042,16 +1110,16 @@ public class PySystemState extends PyObject implements AutoCloseable,
         try {
             initializer = initializerClassLoader.loadClass(className);
         } catch (ClassNotFoundException e) {
-            Py.writeWarning("initializer", "Specified initializer class '" + className
-                    + "' not found, continuing");
+            Py.writeWarning("initializer",
+                    "Specified initializer class '" + className + "' not found, continuing");
             return false;
         }
         try {
-            ((JythonInitializer)initializer.newInstance()).initialize(pre, post, argv,
+            ((JythonInitializer) initializer.newInstance()).initialize(pre, post, argv,
                     sysClassLoader, adapter);
         } catch (Exception e) {
-            Py.writeWarning("initializer", "Failed initializing with class '" + className
-                    + "', continuing");
+            Py.writeWarning("initializer",
+                    "Failed initializing with class '" + className + "', continuing");
             e.printStackTrace(System.err);
             return false;
         }
@@ -1081,7 +1149,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
 
         // other initializations
         initBuiltins(registry);
-//        initStaticFields();
+        // initStaticFields();
 
         // Initialize the path (and add system defaults)
         defaultPath = initPath(registry, standalone, jarFileName);
@@ -1124,14 +1192,14 @@ public class PySystemState extends PyObject implements AutoCloseable,
         } else if (Version.PY_RELEASE_LEVEL == 0xAA) {
             s = "snapshot";
         } else {
-            throw new RuntimeException("Illegal value for PY_RELEASE_LEVEL: "
-                    + Version.PY_RELEASE_LEVEL);
+            throw new RuntimeException(
+                    "Illegal value for PY_RELEASE_LEVEL: " + Version.PY_RELEASE_LEVEL);
         }
-        return new PyVersionInfo(
-                Py.newInteger(Version.PY_MAJOR_VERSION),
-                Py.newInteger(Version.PY_MINOR_VERSION),
-                Py.newInteger(Version.PY_MICRO_VERSION),
-                Py.newString(s),
+        return new PyVersionInfo(//
+                Py.newInteger(Version.PY_MAJOR_VERSION), //
+                Py.newInteger(Version.PY_MINOR_VERSION), //
+                Py.newInteger(Version.PY_MICRO_VERSION), //
+                Py.newString(s), //
                 Py.newInteger(Version.PY_RELEASE_SERIAL));
     }
 
@@ -1275,10 +1343,9 @@ public class PySystemState extends PyObject implements AutoCloseable,
 
     /**
      * Convenience method wrapping {@link Py#writeWarning(String, String)} to issue a warning
-     * message something like:
-     * "console: Failed to load 'org.python.util.ReadlineConsole': <b>msg</b>.". It's only a warning
-     * because the interpreter will fall back to a plain console, but it is useful to know exactly
-     * why it didn't work.
+     * message something like: "console: Failed to load 'org.python.util.ReadlineConsole':
+     * <b>msg</b>.". It's only a warning because the interpreter will fall back to a plain console,
+     * but it is useful to know exactly why it didn't work.
      *
      * @param consoleName console class name we're trying to initialise
      * @param msg specific cause of the failure
@@ -1536,11 +1603,14 @@ public class PySystemState extends PyObject implements AutoCloseable,
     }
 
     @Override
-    public void close() { cleanup(); }
+    public void close() {
+        cleanup();
+    }
 
     public static class PySystemStateCloser {
 
-        private final Set<Callable<Void>> resourceClosers = Collections.synchronizedSet(new LinkedHashSet<Callable<Void>>());
+        private final Set<Callable<Void>> resourceClosers =
+                Collections.synchronizedSet(new LinkedHashSet<Callable<Void>>());
         private volatile boolean isCleanup = false;
         private final Thread shutdownHook;
 
@@ -1595,13 +1665,14 @@ public class PySystemState extends PyObject implements AutoCloseable,
             // Re-enable the management of resource closers
             isCleanup = false;
         }
+
         private synchronized void runClosers() {
             // resourceClosers can be null in some strange cases
             if (resourceClosers != null) {
                 /*
-                    * Although a Set, the container iterates in the order closers were added. Make a Deque
-                    * of it and deal from the top.
-                    */
+                 * Although a Set, the container iterates in the order closers were added. Make a
+                 * Deque of it and deal from the top.
+                 */
                 LinkedList<Callable<Void>> rc = new LinkedList<Callable<Void>>(resourceClosers);
                 Iterator<Callable<Void>> iter = rc.descendingIterator();
 
@@ -1619,7 +1690,8 @@ public class PySystemState extends PyObject implements AutoCloseable,
         // Python scripts expect that files are closed upon an orderly cleanup of the VM.
         private Thread initShutdownCloser() {
             try {
-                Thread shutdownHook = new Thread(new ShutdownCloser(this), "Jython Shutdown Closer");
+                Thread shutdownHook =
+                        new Thread(new ShutdownCloser(this), "Jython Shutdown Closer");
                 Runtime.getRuntime().addShutdownHook(shutdownHook);
                 return shutdownHook;
             } catch (SecurityException se) {
@@ -1629,6 +1701,7 @@ public class PySystemState extends PyObject implements AutoCloseable,
         }
 
         private class ShutdownCloser implements Runnable {
+
             PySystemStateCloser closer = null;
 
             public ShutdownCloser(PySystemStateCloser closer) {
@@ -1648,49 +1721,60 @@ public class PySystemState extends PyObject implements AutoCloseable,
     }
 
     /**
-     * Backed as follows:
-     * Windows: cmd.exe /C ver (part after "Windows")
-     * Other:   uname -v
+     * Attempt to find the OS version. The mechanism on Windows is to extract it from the result of
+     * <code>cmd.exe /C ver</code>, and otherwise (assumed Unix-like OS) to use
+     * <code>uname -v</code>.
      */
     public static String getSystemVersionString() {
-        try {
-            String uname_sysver;
-            boolean win = System.getProperty("os.name").startsWith("Windows");
-            Process p = Runtime.getRuntime().exec(
-                    win ? "cmd.exe /C ver" : "uname -v");
-            java.io.BufferedReader br = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(p.getInputStream()));
-            uname_sysver = br.readLine();
-            while (uname_sysver != null && uname_sysver.length() == 0) {
-                uname_sysver = br.readLine();
-            }
-            // to end the process sanely in case we deal with some
-            // implementation that emits additional new-lines:
-            while (br.readLine() != null) {
-                ;
-            }
-            br.close();
-            if (p.waitFor() != 0) {
-                // No fallback for sysver available
-                uname_sysver = "";
-            }
-            if (win && uname_sysver.length() > 0) {
-                int start = uname_sysver.toLowerCase().indexOf("version ");
-                if (start != -1) {
-                    start += 8;
-                    int end = uname_sysver.length();
-                    if (uname_sysver.endsWith("]")) {
-                        --end;
-                    }
-                    uname_sysver = uname_sysver.substring(start, end);
+        if (System.getProperty("os.name").startsWith("Windows")) {
+            String ver = getCommandResult("cmd.exe", "/c", "ver");
+            int start = ver.toLowerCase().indexOf("version ");
+            if (start != -1) {
+                start += 8;
+                int end = ver.length();
+                if (ver.endsWith("]")) {
+                    --end;
                 }
+                ver = ver.substring(start, end);
             }
-            return uname_sysver;
-        } catch (Exception e) {
-            return "";
+            return ver;
+        } else {
+            return getCommandResult("uname", "-v");
         }
     }
 
+    /**
+     * Run a command as a sub-process and return as the result the first line of output that consist
+     * of more than white space. It returns "" on any kind of error.
+     *
+     * @param command as strings (as for <code>ProcessBuilder</code>)
+     * @return the first line with content, or ""
+     */
+    private static String getCommandResult(String... command) {
+        String result = "", line = null;
+        ProcessBuilder pb = new ProcessBuilder(command);
+        try {
+            Process p = pb.start();
+            java.io.BufferedReader br =
+                    new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+            // We read to the end-of-stream in case the sub-process cannot end cleanly without.
+            while ((line = br.readLine()) != null) {
+                if (line.length() > 0 && result.length() == 0) {
+                    // This is the first line with content (maybe).
+                    result = line.trim();
+                }
+            }
+            br.close();
+            // Now we wait for the sub-process to terminate nicely.
+            if (p.waitFor() != 0) {
+                // Bad exit status: don't take the result.
+                result = "";
+            }
+        } catch (IOException | InterruptedException | SecurityException e) {
+            result = "";
+        }
+        return result;
+    }
 
     /* Traverseproc implementation */
     @Override
@@ -1845,16 +1929,14 @@ public class PySystemState extends PyObject implements AutoCloseable,
 
     @Override
     public boolean refersDirectlyTo(PyObject ob) {
-        return ob != null && (ob == argv || ob ==  modules || ob == path
-            || ob == warnoptions || ob == builtins || ob == platform
-            || ob == meta_path || ob == path_hooks || ob == path_importer_cache
-            || ob == ps1 || ob == ps2 || ob == executable || ob == stdout
-            || ob == stderr || ob == stdin || ob == __stdout__ || ob == __stderr__
-            || ob == __stdin__ || ob == __displayhook__ || ob == __excepthook__
-            || ob ==  last_value || ob == last_type || ob == last_traceback
-            || ob ==__name__ || ob == __dict__);
+        return ob != null && (ob == argv || ob == modules || ob == path || ob == warnoptions
+                || ob == builtins || ob == platform || ob == meta_path || ob == path_hooks
+                || ob == path_importer_cache || ob == ps1 || ob == ps2 || ob == executable
+                || ob == stdout || ob == stderr || ob == stdin || ob == __stdout__
+                || ob == __stderr__ || ob == __stdin__ || ob == __displayhook__
+                || ob == __excepthook__ || ob == last_value || ob == last_type
+                || ob == last_traceback || ob == __name__ || ob == __dict__);
     }
-
 
     /**
      * Helper abstracting common code from {@link ShutdownCloser#run()} and
@@ -1974,16 +2056,15 @@ class FloatInfo extends PyTuple {
 
     @Override
     public PyString __repr__() {
-        return (PyString) Py.newString(
-                TYPE.fastGetName() + "(" +
-                "max=%r, max_exp=%r, max_10_exp=%r, min=%r, min_exp=%r, min_10_exp=%r, "+
-                "dig=%r, mant_dig=%r, epsilon=%r, radix=%r, rounds=%r)").__mod__(this);
+        return (PyString) Py.newString(TYPE.fastGetName() + "("
+                + "max=%r, max_exp=%r, max_10_exp=%r, min=%r, min_exp=%r, min_10_exp=%r, "
+                + "dig=%r, mant_dig=%r, epsilon=%r, radix=%r, rounds=%r)").__mod__(this);
     }
 
-
-    /* Note for Traverseproc implementation:
-     * We needn't visit the fields, because they are also represented as tuple elements
-     * in the parent class. So deferring to super-implementation is sufficient.
+    /*
+     * Note for Traverseproc implementation: We needn't visit the fields, because they are also
+     * represented as tuple elements in the parent class. So deferring to super-implementation is
+     * sufficient.
      */
 }
 
@@ -2011,15 +2092,15 @@ class LongInfo extends PyTuple {
 
     @Override
     public PyString __repr__() {
-        return (PyString) Py.newString(
-                TYPE.fastGetName() + "(" +
-                "bits_per_digit=%r, sizeof_digit=%r)").__mod__(this);
+        return (PyString) Py
+                .newString(TYPE.fastGetName() + "(" + "bits_per_digit=%r, sizeof_digit=%r)")
+                .__mod__(this);
     }
 
-
-    /* Note for Traverseproc implementation:
-     * We needn't visit the fields, because they are also represented as tuple elements
-     * in the parent class. So deferring to super-implementation is sufficient.
+    /*
+     * Note for Traverseproc implementation: We needn't visit the fields, because they are also
+     * represented as tuple elements in the parent class. So deferring to super-implementation is
+     * sufficient.
      */
 }
 
@@ -2050,38 +2131,37 @@ class WinVersion extends PyTuple {
             int minor = Integer.parseInt(sys_ver[1]);
             int build = Integer.parseInt(sys_ver[2]);
             if (major > 6) {
-                major = 6; minor = 2; build = 9200;
+                major = 6;
+                minor = 2;
+                build = 9200;
             } else if (major == 6 && minor > 2) {
-                minor = 2; build = 9200;
+                minor = 2;
+                build = 9200;
             }
             // emulate deprecation behavior of GetVersionEx:
-            return new WinVersion(
-                    Py.newInteger(major), // major
+            return new WinVersion(Py.newInteger(major), // major
                     Py.newInteger(minor), // minor
                     Py.newInteger(build), // build
                     Py.newInteger(2), // platform
                     Py.EmptyString); // service_pack
         } catch (Exception e) {
-            return new WinVersion(Py.EmptyString, Py.EmptyString,
-                    Py.EmptyString, Py.EmptyString, Py.EmptyString);
+            return new WinVersion(Py.EmptyString, Py.EmptyString, Py.EmptyString, Py.EmptyString,
+                    Py.EmptyString);
         }
     }
 
     @Override
     public PyString __repr__() {
-        return (PyString) Py.newString(
-                TYPE.fastGetName() + "(major=%r, minor=%r, build=%r, " +
-                "platform=%r, service_pack=%r)").__mod__(this);
+        return (PyString) Py.newString(TYPE.fastGetName() + "(major=%r, minor=%r, build=%r, "
+                + "platform=%r, service_pack=%r)").__mod__(this);
     }
 
-
-    /* Note for traverseproc implementation:
-     * We needn't visit the fields, because they are also represented as tuple elements
-     * in the parent class. So deferring to super-implementation is sufficient.
+    /*
+     * Note for traverseproc implementation: We needn't visit the fields, because they are also
+     * represented as tuple elements in the parent class. So deferring to super-implementation is
+     * sufficient.
      *
-     * (In CPython sys.getwindowsversion can have some keyword-only elements. So far
-     * we don't support these here. If that changes, an actual traverseproc implementation
-     * might be required.
+     * (In CPython sys.getwindowsversion can have some keyword-only elements. So far we don't
+     * support these here. If that changes, an actual traverseproc implementation might be required.
      */
 }
-

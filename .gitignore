@@ -7,6 +7,9 @@
 *.swp
 \#*
 *~
+
+.gradle
+
 # IntelliJ files
 *.eml
 *.ipr
@@ -30,10 +33,13 @@ nbbuild.xml
 __pycache__
 ant.properties
 bin
+
 build
+build2
 cachedir
 dist
 target
+
 profile.txt
 
 # non distributable external libraries
