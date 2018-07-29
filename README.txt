@@ -5,9 +5,33 @@ See also: http://bugs.jython.org/issue2582
 
 There are at least two jnr-posix issues, one of them can be found here 
 https://github.com/jnr/jnr-posix/issues/110
+The output of java 10 is as follows:
+java --illegal-access=warn -jar jython-standalone.jar
+WARNING: Illegal reflective access by jnr.posix.JavaLibCHelper$ReflectiveAccess (file:/Users/oti/Downloads/jython-standalone.jar) to method sun.nio.ch.SelChImpl.getFD()
+WARNING: Illegal reflective access by jnr.posix.JavaLibCHelper$ReflectiveAccess (file:/Users/oti/Downloads/jython-standalone.jar) to field sun.nio.ch.FileChannelImpl.fd
+WARNING: Illegal reflective access by jnr.posix.JavaLibCHelper$ReflectiveAccess (file:/Users/oti/Downloads/jython-standalone.jar) to field java.io.FileDescriptor.fd
+Jython 2.7.2a1+ (, Jul 29 2018, 10:16:02) 
+[Java HotSpot(TM) 64-Bit Server VM ("Oracle Corporation")] on java10.0.2
+Type "help", "copyright", "credits" or "license" for more information.
+>>> 
+
 
 JRuby as well is struggling with those: 
 https://github.com/jruby/jruby/issues/4834
+And there you can find a workaround:
+java --illegal-access=warn --add-opens java.base/sun.nio.ch=ALL-UNNAMED --add-opens java.base/java.io=ALL-UNNAMED -jar jython-standalone.jar
+Jython 2.7.2a1+ (, Jul 29 2018, 10:16:02) 
+[Java HotSpot(TM) 64-Bit Server VM ("Oracle Corporation")] on java10.0.2
+Type "help", "copyright", "credits" or "license" for more information.
+>>>
+
+AND
+
+java --illegal-access=debug -Dpython.launcher.tty=true -jar jython-standalone.jar
+Jython 2.7.2a1+ (, Jul 29 2018, 10:16:02) 
+[Java HotSpot(TM) 64-Bit Server VM ("Oracle Corporation")] on java10.0.2
+Type "help", "copyright", "credits" or "license" for more information.
+>>>
 
 
 jdeps --jdk-internals should not list out scary stuff.
