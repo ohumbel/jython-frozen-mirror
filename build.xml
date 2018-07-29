@@ -203,9 +203,9 @@ oracle.jar=C:/workspace/HEAD/for_development/bisdevsrv28/jboss/server/infra/lib/
 
         <!-- properties work.dir and jython.base.dir are also definied in init,
              so full-preinit must run first to work -->
-        <property name="work.dir" value="${basedir}/../full_build/work" />
-        <property name="checkout.dir" value="${work.dir}/checkout" />
-        <property name="jython.base.dir" value="${checkout.dir}/${hg.code.dir}" />
+        <property name="work.dir" value="${basedir}/full_build/work" />
+        <property name="checkout.dir" value="${basedir}" />
+        <property name="jython.base.dir" value="${basedir}" />
         <!-- set has.repositories.connection to false in ant.properties if you want to skip checkout -->
         <property name="has.repositories.connection" value="true" />
         <condition property="do.checkout" value="true">
