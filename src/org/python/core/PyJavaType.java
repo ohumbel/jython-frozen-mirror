@@ -1,4 +1,9 @@
+// Copyright (c)2019 Jython Developers.
+// Licensed to PSF under a Contributor Agreement.
 package org.python.core;
+
+import org.python.core.util.StringUtil;
+import org.python.util.Generic;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -27,16 +32,16 @@ import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.EventListener;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
 import java.util.Stack;
-
-import org.python.core.util.StringUtil;
-import org.python.util.Generic;
 
 public class PyJavaType extends PyType {
 
@@ -218,64 +223,101 @@ public class PyJavaType extends PyType {
         postDelattr(name);
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * An override specifically for Java classes (that are not {@link PyObject}) has the possibility
+     * of completing the MRO in {@code mro}, by additional steps affecting the {@code mro} and
+     * {@code toMerge} passed in. This divergence from the Python rules is acceptable for Java.
+     */
     @Override
     void handleMroError(MROMergeState[] toMerge, List<PyObject> mro) {
+
         if (underlying_class != null) {
-            // If this descends from PyObject, don't do the Java mro cleanup
+            // This descends from PyObject (but is not exposed): don't attempt recovery.
             super.handleMroError(toMerge, mro);
         }
-        Set<PyJavaType> inConflict = Generic.set();
-        PyJavaType winner = null;
+
+        // Make a set of all the PyJavaTypes still in the lists to merge.
+        Set<PyJavaType> inConflict = new LinkedHashSet<>();
         for (MROMergeState mergee : toMerge) {
             for (int i = mergee.next; i < mergee.mro.length; i++) {
-                if (mergee.mro[i] == PyObject.TYPE
-                        || mergee.mro[i] == PyType.fromClass(Object.class)) {
-                    continue;
+                PyObject m = mergee.mro[i];
+                if (m instanceof PyJavaType && m != Constant.OBJECT) {
+                    inConflict.add((PyJavaType) m);
                 }
-                if (winner == null) {
-                    /*
-                     * Pick an arbitrary class to be added to the mro next and break the conflict.
-                     * If method name conflicts were allowed between methods added to Java types, it
-                     * would go first, but that's prevented, so being a winner doesn't actually get
-                     * it anything.
-                     */
-                    winner = (PyJavaType) mergee.mro[i];
-                }
-                inConflict.add((PyJavaType) mergee.mro[i]);
             }
         }
 
-        Set<String> allModified = Generic.set();
-        PyJavaType[] conflictedAttributes = inConflict.toArray(new PyJavaType[inConflict.size()]);
-        for (PyJavaType type : conflictedAttributes) {
-            if (type.modified == null) {
-                continue;
-            }
-            for (String method : type.modified) {
-                if (!allModified.add(method)) {
-                    // Another type in conflict has this method, possibly fail
-                    PyList types = new PyList();
-                    Set<Class<?>> proxySet = Generic.set();
-                    for (PyJavaType othertype : conflictedAttributes) {
-                        if (othertype.modified != null && othertype.modified.contains(method)) {
-                            types.add(othertype);
-                            proxySet.add(othertype.getProxyType());
+        /*
+         * Collect the names of all the methods added to any of these types (with certain
+         * exclusions) that occur in more than one of these residual types. If a name is found in
+         * more than one of these types, raise an error.
+         */
+        Set<String> allModified = new HashSet<>();
+        for (PyJavaType type : inConflict) {
+            if (type.modified != null) {
+                // For every method name modified in type ...
+                for (String method : type.modified) {
+                    if (!allModified.add(method)) {
+                        /*
+                         * The method name was already in the set, so has appeared already. Work out
+                         * which one that was by rescanning.
+                         */
+                        List<PyJavaType> types = new ArrayList<>();
+                        Set<Class<?>> proxySet = new HashSet<>();
+                        Class<?> proxyType = type.getProxyType();
+                        for (PyJavaType othertype : inConflict) {
+                            /*
+                             * Ignore any pairings of types that are in a superclass/superinterface
+                             * relationship with each other. This problem is a false positive that
+                             * happens because of the automatic addition of methods so that Java
+                             * classes behave more like their corresponding Python types, such as
+                             * adding sort or remove. See http://bugs.jython.org/issue2445
+                             */
+                            if (othertype.modified != null && othertype.modified.contains(method)) {
+                                Class<?> otherProxyType = othertype.getProxyType();
+                                if (otherProxyType.isAssignableFrom(proxyType)) {
+                                    continue;
+                                } else if (proxyType.isAssignableFrom(otherProxyType)) {
+                                    continue;
+                                } else {
+                                    types.add(othertype);
+                                    proxySet.add(otherProxyType);
+                                }
+                            }
+                        }
+
+                        /*
+                         * Need to special case __iter__ in certain circumstances to ignore the
+                         * conflict in having duplicate __iter__ added (see getCollectionProxies),
+                         * while still allowing each path on the inheritance hierarchy to get an
+                         * __iter__. Annoying but necessary logic.
+                         */
+                        if (method.equals("__iter__")) {
+                            if (Generic.set(Iterable.class, Map.class).containsAll(proxySet)) {
+                                /*
+                                 * Need to special case __iter__ in collections that implement both
+                                 * Iterable and Map. See http://bugs.jython.org/issue1878
+                                 */
+                                continue;
+                            } else if (Generic.set(Iterator.class, Enumeration.class)
+                                    .containsAll(proxySet)) {
+                                /*
+                                 * Need to special case __iter__ in iterators that Iterator and
+                                 * Enumeration. Annoying but necessary logic. See
+                                 * http://bugs.jython.org/issue2445
+                                 */
+                                continue;
+                            }
+                        }
+
+                        String fmt = "Supertypes that share a modified attribute "
+                                + "have an MRO conflict[attribute=%s, supertypes=%s, type=%s]";
+                        if (types.size() > 0) {
+                            throw Py.TypeError(String.format(fmt, method, types, this.getName()));
                         }
                     }
-                    /*
-                     * Need to special case collections that implement both Iterable and Map. Ignore
-                     * the conflict in having duplicate __iter__ added (see getCollectionProxies),
-                     * while still allowing each path on the inheritance hierarchy to get an
-                     * __iter__. Annoying but necessary logic. See http://bugs.jython.org/issue1878
-                     */
-                    if (method.equals("__iter__")
-                            && proxySet.equals(Generic.set(Iterable.class, Map.class))) {
-                        continue;
-                    }
-                    throw Py.TypeError(String.format(
-                            "Supertypes that share a modified attribute "
-                                    + "have an MRO conflict[attribute=%s, supertypes=%s, type=%s]",
-                            method, types, this.getName()));
                 }
             }
         }
@@ -284,7 +326,7 @@ public class PyJavaType extends PyType {
          * We can keep trucking, there aren't any existing method name conflicts. Mark the conflicts
          * in all the classes so further method additions can check for trouble.
          */
-        for (PyJavaType type : conflictedAttributes) {
+        for (PyJavaType type : inConflict) {
             for (PyJavaType otherType : inConflict) {
                 if (otherType != type) {
                     if (type.conflicted == null) {
@@ -295,11 +337,18 @@ public class PyJavaType extends PyType {
             }
         }
 
-        // Add our winner to the mro, clear the clog, and try to finish the rest
+        /*
+         * Emit the first conflicting type we encountered to the MRO, and remove it from the working
+         * lists. Forcing a step like this is ok for classes compiled from Java as the order of
+         * bases is not significant as long as hierarchy is preserved.
+         */
+        PyJavaType winner = inConflict.iterator().next();
         mro.add(winner);
         for (MROMergeState mergee : toMerge) {
             mergee.removeFromUnmerged(winner);
         }
+
+        // Restart the MRO generation algorithm from the current state.
         computeMro(toMerge, mro);
     }
 
@@ -345,7 +394,7 @@ public class PyJavaType extends PyType {
              * superclass.
              */
             needsInners.add(this);
-            List<PyObject> visibleBases = Generic.list();
+            LinkedList<PyObject> visibleBases = new LinkedList<>();
             for (Class<?> iface : forClass.getInterfaces()) {
                 if (iface == PyProxy.class || iface == ClassDictInit.class) {
                     /*
@@ -369,13 +418,27 @@ public class PyJavaType extends PyType {
             if (forClass == Object.class) {
                 base = Constant.PYOBJECT;
             } else if (baseClass == null) {
+                /*
+                 * It would be most like Java to have no base (like PyNone) but in that case, the
+                 * MRO calculation puts Object ahead of the interface. Our patching of Java
+                 * container interfaces to behave like Python container objects requires the
+                 * opposite.
+                 */
                 base = Constant.OBJECT;
             } else if (forClass == Class.class) {
                 base = Constant.PYTYPE;
             } else {
                 base = fromClass(baseClass);
             }
-            visibleBases.add(base);
+
+            if (baseClass == null) {
+                // Object, an interface, a primitive or void: base goes last.
+                visibleBases.add(base);
+            } else {
+                // forClass represents a (concrete or abstract) class: base comes before interfaces.
+                visibleBases.push(base);
+            }
+
             this.bases = visibleBases.toArray(new PyObject[visibleBases.size()]);
             mro = computeMro();
         }
@@ -431,14 +494,18 @@ public class PyJavaType extends PyType {
                 }
             }
         }
-        // Methods must be in resolution order. See issue #2391 for detail.
+
+        // Methods must be in resolution order. See issue bjo #2391 for detail.
         Arrays.sort(methods, new MethodComparator(new ClassComparator()));
 
         // Add methods, also accumulating them in reflectedFuncs, and spotting Java Bean members.
         ArrayList<PyReflectedFunction> reflectedFuncs = new ArrayList<>(methods.length);
         Map<String, PyBeanProperty> props = Generic.map();
         Map<String, PyBeanEvent<?>> events = Generic.map();
+
+        // First pass skip inherited (and certain "ignored") methods.
         addMethods(baseClass, reflectedFuncs, props, events, methods);
+        // Add inherited and previously ignored methods
         addInheritedMethods(reflectedFuncs, methods);
 
         // Add fields declared on this type
@@ -591,10 +658,11 @@ public class PyJavaType extends PyType {
     }
 
     /**
-     * Process the given class for methods defined on the target class itself (the
-     * <code>fromClass</code>), rather than inherited.
-     *
-     * This is exclusively a helper method for {@link #init(Set)}.
+     * Add descriptors to this type's dictionary ({@code __dict__}) for methods defined on the
+     * target class itself (the {@code fromClass}), where not inherited. One descriptor is created
+     * for each simple name and a signature for every method with that simple name is added to the
+     * descriptor. See also {@link #addInheritedMethods(List, Method[])}. This is exclusively a
+     * helper method for {@link #init(Set)}.
      *
      * @param baseClass ancestor of the target class
      * @param reflectedFuncs to which reflected functions are added for further processing
@@ -608,7 +676,6 @@ public class PyJavaType extends PyType {
 
         boolean isInAwt = name.startsWith("java.awt.") && name.indexOf('.', 9) == -1;
 
-        // First pass skip inherited (and certain "ignored") methods.
         for (Method meth : methods) {
             if (!declaredHere(baseClass, meth) || ignore(meth)) {
                 continue;
@@ -629,10 +696,12 @@ public class PyJavaType extends PyType {
 
             PyReflectedFunction reflfunc = (PyReflectedFunction) dict.__finditem__(nmethname);
             if (reflfunc == null) {
+                // A new descriptor is required
                 reflfunc = new PyReflectedFunction(meth);
                 reflectedFuncs.add(reflfunc);
                 dict.__setitem__(nmethname, reflfunc);
             } else {
+                // A descriptor for the same simple name exists: add a signature to it.
                 reflfunc.addMethod(meth);
             }
 
@@ -718,15 +787,29 @@ public class PyJavaType extends PyType {
     }
 
     /**
-     * Process the given class for methods inherited from ancestor classes.
-     *
-     * This is exclusively a helper method for {@link #init(Set)}.
+     * Add descriptors to this type's dictionary ({@code __dict__}) for methods inherited from
+     * ancestor classes. This is exclusively a helper method for {@link #init(Set)}.
+     * <p>
+     * Python finds an inherited method by looking in the dictionaries of types along the MRO. This
+     * is does not directly emulate the signature polymorphism of Java. Even though the entries of
+     * the MRO include the {@code PyType}s of the Java ancestors of this class, each type's
+     * dictionary is keyed on the simple name of the method. For the present class, and at the point
+     * where this method is called, any method defined on this class has created a descriptor entry
+     * for that method name (see {@link #addMethods(Class, List, Map, Map, Method[])}), but only for
+     * the signatures defined directly in this class. If any method of the same simple name is
+     * inherited in Java from a super-class, it is now shadowed by this entry as far as Python is
+     * concerned. The purpose of this method is to add the shadowed method signatures.
+     * <p>
+     * For example {@code AbstractCollection<E>} defines {@code add(E)}, and {@code AbstractList<E>}
+     * inherits it but also defines {@code add(int, E)} (giving control of the insertion point).
+     * When {@link #addMethods(Class, List, Map, Map, Method[])} completes, the "add" descriptor in
+     * {@code type(AbstractList)}, represents only {@code add(int, E)}, and we must add the
+     * inherited signature for {@code add(E)}.
      *
      * @param reflectedFuncs to which reflected functions are added for further processing
      * @param methods of the target class
      */
     private void addInheritedMethods(List<PyReflectedFunction> reflectedFuncs, Method[] methods) {
-        // Add inherited and previously ignored methods
         for (Method meth : methods) {
             String nmethname = normalize(meth.getName());
             PyReflectedFunction reflfunc = (PyReflectedFunction) dict.__finditem__(nmethname);

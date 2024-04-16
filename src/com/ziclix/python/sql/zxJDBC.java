@@ -34,7 +34,7 @@ import java.util.ResourceBundle;
 
 /**
  * Creates database connections.
- * <p/>
+ * <p>
  * <pre>
  * from com.ziclix.python.sql import zxJDBC
  * db = zxJDBC.connect("jdbc:mysql://localhost:3306/MySql", None, None, "org.gjt.mm.mysql.Driver")
@@ -223,7 +223,8 @@ public class zxJDBC extends PyObject implements ClassDictInit {
             String className = props.getProperty(name).trim();
 
             try {
-                connector = (PyObject) Class.forName(className).newInstance();
+                connector =
+                        (PyObject) Class.forName(className).getDeclaredConstructor().newInstance();
                 dict.__setitem__(name, connector);
                 Py.writeComment("zxJDBC", "loaded connector [" + className + "] as [" + name
                                 + "]");
@@ -326,7 +327,7 @@ public class zxJDBC extends PyObject implements ClassDictInit {
      * @return PyException
      */
     public static PyException makeException(PyObject type, String msg) {
-        return Py.makeException(type, msg == null ? Py.EmptyString : Py.newString(msg));
+        return Py.makeException(type, msg == null ? Py.EmptyString : Py.newStringOrUnicode(msg));
     }
 
     /**
@@ -419,7 +420,6 @@ public class zxJDBC extends PyObject implements ClassDictInit {
      *
      * @param classname
      * @param superclass
-     * @param classCodeName
      * @return PyObject
      */
     protected static PyObject buildClass(String classname, PyObject superclass) {

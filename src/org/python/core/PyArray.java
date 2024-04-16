@@ -13,8 +13,8 @@ import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 
 import org.python.core.buffer.BaseBuffer;
+import org.python.core.buffer.SimpleBuffer;
 import org.python.core.buffer.SimpleStringBuffer;
-import org.python.core.buffer.SimpleWritableBuffer;
 import org.python.core.util.ByteSwapper;
 import org.python.core.util.StringUtil;
 import org.python.expose.ExposedGet;
@@ -398,7 +398,7 @@ public class PyArray extends PySequence implements Cloneable, BufferProtocol, Tr
         PyArray otherArr = (PyArray)other;
         if (!otherArr.typecode.equals(this.typecode)) {
             throw Py.TypeError("can only append arrays of the same type, expected '" + this.type
-                    + ", found " + otherArr.type);
+                    + "', found '" + otherArr.type + "'");
         }
         PyArray ret = new PyArray(this);
         ret.delegate.appendArray(otherArr.delegate.copyArray());
@@ -600,9 +600,8 @@ public class PyArray extends PySequence implements Cloneable, BufferProtocol, Tr
 
     /**
      * Converts a character code for the array type to a Java <code>Class</code>.
-     * <p>
-     * The following character codes and their native types are supported:<br />
      * <table>
+     * <caption>Supported character codes and their native types</caption>
      * <tr>
      * <td><strong>Type code</strong></td>
      * <td><strong>native type</strong></td>
@@ -1285,9 +1284,8 @@ public class PyArray extends PySequence implements Cloneable, BufferProtocol, Tr
      * memory this value is the <em>minimum</em> number of bytes required to store the type.
      * <p>
      * This method is used by other methods to define read/write quanta from strings and streams.
-     * <p>
-     * Values returned are:<br />
      * <table>
+     * <caption>Values returned</caption>
      * <tr>
      * <td><strong>Type</strong></td>
      * <td><strong>Size</strong></td>
@@ -2066,40 +2064,46 @@ public class PyArray extends PySequence implements Cloneable, BufferProtocol, Tr
      * <p>
      * The {@link PyBuffer} returned from this method is a one-dimensional array of single byte
      * items that allows modification of the object state. The existence of this export <b>prohibits
-     * resizing</b> the byte array. This prohibition is not only on the consumer of the view but
-     * extends to any other operations, such as any kind or insertion or deletion.
+     * resizing</b> the array. This prohibition is not only on the consumer of the view but extends
+     * to operations on the underlying array, such as {@link #insert(int, PyObject)} or
+     * {@link #pop()}.
      */
     @Override
     public synchronized PyBuffer getBuffer(int flags) {
 
-        // If we have already exported a buffer it may still be available for re-use
-        BaseBuffer pybuf = getExistingBuffer(flags);
+        if ((flags & ~PyBUF.WRITABLE) == PyBUF.SIMPLE) {
+            // Client requests a flat byte-oriented read-view, typically from buffer(a).
 
-        if (pybuf == null) {
-            // No existing export we can re-use: create a new one
-            if ("b".equals(typecode)) {
-                // This is byte data, so we are within the state of the art
-                byte[] storage = (byte[])data;
-                int size = delegate.getSize();
-                pybuf = new SimpleWritableBuffer(flags, this, storage, 0, size);
-            } else if ((flags & PyBUF.WRITABLE) == 0) {
-                // As the client only intends to read, fake the answer with a String
-                pybuf = new SimpleStringBuffer(flags, this, tostring());
-            } else {
-                // For the time being ...
-                throw Py.NotImplementedError("only array('b') can export a writable buffer");
+            // If we have already exported a buffer it may still be available for re-use
+            BaseBuffer pybuf = getExistingBuffer(flags);
+
+            if (pybuf == null) {
+                // No existing export we can re-use: create a new one
+                if ("b".equals(typecode)) {
+                    // This is byte data, so we can export directly
+                    byte[] storage = (byte[]) data;
+                    int size = delegate.getSize();
+                    pybuf = new SimpleBuffer(flags, this, storage, 0, size);
+                } else {
+                    // As the client only intends to read, fake the answer with a String
+                    pybuf = new SimpleStringBuffer(flags, this, tostring());
+                }
+                // Hold a reference for possible re-use
+                export = new WeakReference<BaseBuffer>(pybuf);
             }
-            // Hold a reference for possible re-use
-            export = new WeakReference<BaseBuffer>(pybuf);
-        }
 
-        return pybuf;
+            return pybuf;
+
+        } else {
+            // Client request goes beyond Python 2 capability, typically from memoryview(a).
+            throw new ClassCastException("'array' supports only a byte-buffer view");
+        }
     }
 
     /**
      * Try to re-use an existing exported buffer, or return <code>null</code> if we can't.
      *
-     * @throws PyException (BufferError) if the the flags are incompatible with the buffer
+     * @throws PyException {@code BufferError} if the the flags are incompatible with the buffer
      */
     private BaseBuffer getExistingBuffer(int flags) throws PyException {
         BaseBuffer pybuf = null;
@@ -2123,7 +2127,7 @@ public class PyArray extends PySequence implements Cloneable, BufferProtocol, Tr
      * Test to see if the array may be resized and raise a BufferError if not. This must be called
      * by the implementation of any operation that changes the number of elements in the array.
      *
-     * @throws PyException (BufferError) if there are buffer exports preventing a resize
+     * @throws PyException {@code BufferError} if there are buffer exports preventing a resize
      */
     private void resizeCheck() throws PyException {
         if (export != null) {

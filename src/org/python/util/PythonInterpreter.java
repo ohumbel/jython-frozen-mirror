@@ -6,23 +6,22 @@ import java.io.StringReader;
 import java.util.Properties;
 
 import org.python.antlr.base.mod;
+import org.python.core.CodeFlag;
 import org.python.core.CompileMode;
 import org.python.core.CompilerFlags;
-import org.python.core.imp;
 import org.python.core.Options;
 import org.python.core.ParserFacade;
 import org.python.core.Py;
 import org.python.core.PyCode;
 import org.python.core.PyException;
 import org.python.core.PyFile;
+import org.python.core.PyFileReader;
 import org.python.core.PyFileWriter;
 import org.python.core.PyModule;
 import org.python.core.PyObject;
 import org.python.core.PyString;
-import org.python.core.PyStringMap;
 import org.python.core.PySystemState;
 import org.python.core.__builtin__;
-import org.python.core.PyFileReader;
 
 /**
  * The PythonInterpreter class is a standard wrapper for a Jython interpreter for embedding in a
@@ -96,21 +95,17 @@ public class PythonInterpreter implements AutoCloseable, Closeable {
 
     protected PythonInterpreter(PyObject dict, PySystemState systemState,
             boolean useThreadLocalState) {
-        if (dict == null) {
-            dict = Py.newStringMap();
-        }
-        globals = dict;
 
-        if (systemState == null) {
-            systemState = Py.getSystemState();
-        }
-        this.systemState = systemState;
+        globals = dict != null ? dict : Py.newStringMap();
+        this.systemState = systemState != null ? systemState : Py.getSystemState();
         setSystemState();
 
         this.useThreadLocalState = useThreadLocalState;
-        if (!useThreadLocalState) {
-            PyModule module = new PyModule("__main__", dict);
-            systemState.modules.__setitem__("__main__", module);
+        PyModule module = new PyModule("__main__", globals);
+        this.systemState.modules.__setitem__("__main__", module);
+
+        if (Options.Qnew) {
+            cflags.setFlag(CodeFlag.CO_FUTURE_DIVISION);
         }
 
         Py.importSiteIfSelected();
@@ -161,6 +156,7 @@ public class PythonInterpreter implements AutoCloseable, Closeable {
      * stream is used in a byte-oriented way (mostly) that depends on the type of file-like object.
      * The behaviour as implemented is:
      * <table border=1>
+     * <caption>Stream behaviour for various object types</caption>
      * <tr align=center>
      * <td></td>
      * <td colspan=3>Python type of object <code>o</code> written</td>
@@ -198,8 +194,8 @@ public class PythonInterpreter implements AutoCloseable, Closeable {
     }
 
     /**
-     * Sets a {@link Writer} to use for the standard output stream, <code>sys.stdout</code>. The
-     * behaviour as implemented is to output each object <code>o</code> by calling
+     * Sets a {@link java.io.Writer} to use for the standard output stream, <code>sys.stdout</code>.
+     * The behaviour as implemented is to output each object <code>o</code> by calling
      * <code>o.toString()</code> and writing this as UTF-16.
      *
      * @param outStream to use as the output stream
@@ -229,8 +225,8 @@ public class PythonInterpreter implements AutoCloseable, Closeable {
     }
 
     /**
-     * Sets a {@link Writer} to use for the standard output stream, <code>sys.stdout</code>. The
-     * behaviour as implemented is to output each object <code>o</code> by calling
+     * Sets a {@link java.io.Writer} to use for the standard output stream, <code>sys.stdout</code>.
+     * The behaviour as implemented is to output each object <code>o</code> by calling
      * <code>o.toString()</code> and writing this as UTF-16.
      *
      * @param outStream to use as the error output stream
@@ -261,6 +257,11 @@ public class PythonInterpreter implements AutoCloseable, Closeable {
 
     /**
      * Executes a string of Python source in the local namespace.
+     *
+     * In some environments, such as Windows, Unicode characters in the script will be converted
+     * into ascii question marks (?). This can be avoided by first compiling the fragment using
+     * PythonInterpreter.compile(), and using the overridden form of this method which takes a
+     * PyCode object. Code page declarations are not supported.
      */
     public void exec(String s) {
         setSystemState();

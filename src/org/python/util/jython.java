@@ -6,17 +6,22 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.io.PrintStream;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import org.python.Version;
-import org.python.core.CodeFlag;
+import org.python.core.BytecodeLoader;
 import org.python.core.CompileMode;
 import org.python.core.Options;
+import org.python.core.PrePy;
 import org.python.core.Py;
 import org.python.core.PyCode;
 import org.python.core.PyException;
@@ -27,13 +32,63 @@ import org.python.core.PyObject;
 import org.python.core.PyString;
 import org.python.core.PyStringMap;
 import org.python.core.PySystemState;
+import org.python.core.RegistryKey;
 import org.python.core.imp;
-import org.python.core.util.RelativeFile;
-import org.python.modules._systemrestart;
-import org.python.modules.posix.PosixModule;
-import org.python.modules.thread.thread;
 
 public class jython {
+
+    /** Exit status: must have {@code OK.ordinal()==0} */
+    private enum Status {
+        OK, ERROR, NOT_RUN, NO_FILE
+    }
+
+    /** The root of the Jython Logger hierarchy, named "org.python". */
+    public static final Logger logger;// = Logger.getLogger("org.python");
+
+    /**
+     * The default format for console log messages in the command-line Jython. See
+     * {@code java.util.logging.SimpleFormatter} for an explanation of the syntax.
+     * <p>
+     * This format is used in the absence of other logging preferences. Jython tests for definitions
+     * in the system properties of {@code java.util.logging.config.class},
+     * {@code java.util.logging.config.file}, and {@code java.util.logging.SimpleFormatter.format}
+     * and if none of these is defined, it sets the last of them to this value.
+     * <p>
+     * You can choose something else, for example to log with millisecond time stamps, launch Jython
+     * as: <pre>
+     * jython -vv -J-Djava.util.logging.SimpleFormatter.format="[%1$tT.%1$tL] %3$s: (%4$s) %5$s%n"
+     * </pre> Depending on your shell, the argument may need quoting or escaping.
+     */
+    public static final String CONSOLE_LOG_FORMAT = "%3$s %4$s %5$s%n";
+
+    static {
+        SecurityException exception = null;
+        try {
+            // Jython console messages (-v option) are emitted using SimpleFormatter
+            configureSimpleFormatter(CONSOLE_LOG_FORMAT);
+        } catch (SecurityException se) {
+            // Unable to access the necessary system properties. Give up on custom logging.
+            exception = se;
+        }
+
+        // Whether we can configure it or not, we can still _use_ logging.
+        logger = Logger.getLogger("org.python");
+
+        if (exception == null) {
+            try {
+                // Make our "org.python" logger do its own output and not propagate to root.
+                setConsoleHandler(logger);
+            } catch (SecurityException se) {
+                // This probably means no logging finer than INFO (so none enabled by -v)
+                exception = se;
+            }
+        }
+
+        if (exception != null) {
+            logger.log(Level.WARNING, "Unable to format console messages: {0}",
+                    exception.getMessage());
+        }
+    }
 
     // An instance of this class will provide the console (python.console) by default.
     private static final String PYTHON_CONSOLE_CLASS = "org.python.util.JLineConsole";
@@ -41,11 +96,14 @@ public class jython {
     private static final String COPYRIGHT =
             "Type \"help\", \"copyright\", \"credits\" or \"license\" for more information.";
 
+    /** The message output when reporting command-line errors and when asked for help. */
     static final String usageHeader =
             "usage: jython [option] ... [-c cmd | -m mod | file | -] [arg] ...\n";
 
-    private static final String usage = usageHeader
-            + "Options and arguments:\n"
+    /** The message additional to {@link #usageHeader} output when asked for help. */
+    // @formatter:off
+    static final String usageBody =
+            "Options and arguments:\n"
             // + "(and corresponding environment variables):\n"
             + "-B       : don't write bytecode files on import\n"
             // + "also PYTHONDONTWRITEBYTECODE=x\n" +
@@ -54,10 +112,10 @@ public class jython {
             + "-Dprop=v : Set the property `prop' to value `v'\n"
             + "-E       : ignore environment variables (such as JYTHONPATH)\n"
             + "-h       : print this help message and exit (also --help)\n"
-            + "-i       : inspect interactively after running script\n"
-            // + ", (also PYTHONINSPECT=x)\n"
-            + "           and force prompts, even if stdin does not appear to be a terminal\n"
-            + "-jar jar : program read from __run__.py in jar file\n"
+            + "-i       : inspect interactively after running script; forces a prompt even\n"
+            + "           if stdin does not appear to be a terminal; also PYTHONINSPECT=x\n"
+            + "-jar jar : program read from __run__.py in jar file. Deprecated: instead,\n"
+            + "           name the archive as the file argument (runs __main__.py).\n"
             + "-m mod   : run library module as a script (terminates option list)\n"
             // + "-O       : optimize generated bytecode (a tad; also PYTHONOPTIMIZE=x)\n"
             // + "-OO      : remove doc-strings in addition to the -O optimizations\n"
@@ -69,7 +127,7 @@ public class jython {
             + "-u       : unbuffered binary stdout and stderr\n"
             // + "(also PYTHONUNBUFFERED=x)\n"
             // + "           see man page for details on internal buffering relating to '-u'\n"
-            + "-v       : verbose (trace import statements)\n"
+            + "-v       : verbose (emit more \"org.python\" log messages)\n"
             // + "(also PYTHONVERBOSE=x)\n"
             + "           can be supplied multiple times to increase verbosity\n"
             + "-V       : print the Python version number and exit (also --version)\n"
@@ -80,22 +138,83 @@ public class jython {
             + "-        : program read from stdin (default; interactive mode if a tty)\n"
             + "arg ...  : arguments passed to program in sys.argv[1:]\n" + "\n"
             + "Other environment variables:\n" //
-            + "JYTHONPATH: '" + File.pathSeparator
+            + "JYTHONSTARTUP: file executed on interactive startup (no default)\n"
+            + "JYTHONPATH   : '" + File.pathSeparator
             + "'-separated list of directories prefixed to the default module\n"
-            + "            search path.  The result is sys.path.\n"
+            + "               search path.  The result is sys.path.\n"
             + "PYTHONIOENCODING: Encoding[:errors] used for stdin/stdout/stderr.";
+    // @formatter:on
 
-    public static boolean shouldRestart;
+    /**
+     * Print a full usage message onto {@code System.out} or a brief usage message onto
+     * {@code System.err}.
+     *
+     * @param status if {@code == 0} full help version on {@code System.out}.
+     * @return the status given as the argument.
+     */
+    static Status usage(Status status) {
+        boolean fullHelp = (status == Status.OK);
+        PrintStream f = fullHelp ? System.out : System.err;
+        f.printf(usageHeader);
+        if (fullHelp) {
+            f.printf(usageBody);
+        } else {
+            f.println("Try 'jython -h' for more information.");
+        }
+        return status;
+    }
+
+    /**
+     * Try to set the format for SimpleFormatter if no other mechanism has been provided, and
+     * security allows it. Note that the absolute fall-back format is:
+     * {@code "%1$tb %1$td, %1$tY %1$tl:%1$tM:%1$tS %1$Tp %2$s%n%4$s: %5$s%6$s%n"},
+     * defined ultimately in {@code sun.util.logging.LoggingSupport}.
+     *
+     * @param format to set for {@code java.util.logging.SimpleFormatter}
+     * @throws SecurityException if not allowed to read or set necessary properties.
+     */
+    private static void configureSimpleFormatter(String format) throws SecurityException {
+        final String CLASS_KEY = "java.util.logging.config.class";
+        String className = System.getProperty(CLASS_KEY);
+        if (className == null) {
+            final String FILE_KEY = "java.util.logging.config.file";
+            String fileName = System.getProperty(FILE_KEY);
+            if (fileName == null) {
+                final String FORMAT_KEY = "java.util.logging.SimpleFormatter.format";
+                String currentFormat = System.getProperty(FORMAT_KEY);
+                if (currentFormat == null) {
+                    // Note that this sets the format for _all_ console logging
+                    System.setProperty(FORMAT_KEY, format);
+                }
+            }
+        }
+    }
+
+    /**
+     * Customise the logger so that it does not propagate to its parent and has its own
+     * {@code Handler} accepting all messages. The level set on the logger alone therefore controls
+     * whether messages are emitted to the console.
+     *
+     * @param logger to adjust (always "python.org")
+     * @throws SecurityException if no permission to adjust logging
+     */
+    private static void setConsoleHandler(Logger logger) throws SecurityException {
+        logger.setUseParentHandlers(false);
+        Handler handler = new ConsoleHandler();
+        handler.setLevel(Level.ALL);
+        logger.addHandler(handler);
+    }
 
     /**
      * Runs a JAR file, by executing the code found in the file __run__.py, which should be in the
-     * root of the JAR archive. Note that the __name__ is set to the base name of the JAR file and
-     * not to "__main__" (for historic reasons). This method do NOT handle exceptions. the caller
-     * SHOULD handle any (Py)Exceptions thrown by the code.
+     * root of the JAR archive. Note that {@code __name__} is set to the base name of the JAR file
+     * and not to "__main__" (for historical reasons). This method does <b>not</b> handle
+     * exceptions. the caller <b>should</b> handle any {@code (Py)Exceptions} thrown by the code.
      *
      * @param filename The path to the filename to run.
+     * @return {@code 0} on normal termination (otherwise throws {@code PyException}).
      */
-    public static void runJar(String filename) {
+    public static int runJar(String filename) {
         // TBD: this is kind of gross because a local called `zipfile' just magically
         // shows up in the module's globals. Either `zipfile' should be called
         // `__zipfile__' or (preferably, IMO), __run__.py should be imported and a main()
@@ -103,375 +222,468 @@ public class jython {
         // argument.
         //
         // Probably have to keep this code around for backwards compatibility (?)
-        try {
-            ZipFile zip = new ZipFile(filename);
+        try (ZipFile zip = new ZipFile(filename)) {
 
             ZipEntry runit = zip.getEntry("__run__.py");
             if (runit == null) {
-                throw Py.ValueError("jar file missing '__run__.py'");
+                throw Py.ValueError("can't find '__run__.py' in '" + filename + "'");
             }
 
-            PyStringMap locals = Py.newStringMap();
-
-            // Stripping the stuff before the last File.separator fixes Bug #931129 by
-            // keeping illegal characters out of the generated proxy class name
-            int beginIndex;
-            if ((beginIndex = filename.lastIndexOf(File.separator)) != -1) {
+            /*
+             * Stripping the stuff before the last File.separator fixes Bug #931129 by keeping
+             * illegal characters out of the generated proxy class name. Mostly.
+             */
+            int beginIndex = filename.lastIndexOf(File.separator);
+            if (beginIndex >= 0) {
                 filename = filename.substring(beginIndex + 1);
             }
 
-            locals.__setitem__("__name__", new PyString(filename));
+            PyStringMap locals = Py.newStringMap();
+            locals.__setitem__("__name__", Py.fileSystemEncode(filename));
             locals.__setitem__("zipfile", Py.java2py(zip));
 
-            InputStream file = zip.getInputStream(runit);
-            PyCode code;
-            try {
-                code = Py.compile(file, "__run__", CompileMode.exec);
-            } finally {
-                file.close();
-            }
+            InputStream file = zip.getInputStream(runit); // closed when zip is closed
+
+            PyCode code = Py.compile(file, "__run__", CompileMode.exec);
             Py.runCode(code, locals, locals);
+
         } catch (IOException e) {
             throw Py.IOError(e);
         }
+
+        return Status.OK.ordinal();
     }
 
-    public static void main(String[] args) {
-        do {
-            shouldRestart = false;
-            run(args);
-        } while (shouldRestart);
-    }
-
-    private static List<String> warnOptionsFromEnv() {
-        ArrayList<String> opts = new ArrayList<String>();
-
-        try {
-            String envVar = System.getenv("PYTHONWARNINGS");
-            if (envVar == null) {
-                return opts;
-            }
-
-            for (String opt : envVar.split(",")) {
-                opt = opt.trim();
-                if (opt.length() == 0) {
-                    continue;
-                }
-                opts.add(opt);
-            }
-        } catch (SecurityException e) {
-            // Continue
-        }
-
-        return opts;
-    }
-
-    private static List<String> validWarnActions = Arrays.asList("error", "ignore", "always",
-            "default", "module", "once");
-
-    private static void addWarnings(List<String> from, PyList to) {
-        outerLoop : for (String opt : from) {
-            String action = opt.split(":")[0];
-            for (String validWarnAction : validWarnActions) {
-                if (validWarnAction.startsWith(action)) {
-                    if (opt.contains(":")) {
-                        to.append(Py.newString(validWarnAction + opt.substring(opt.indexOf(":"))));
-                    } else {
-                        to.append(Py.newString(validWarnAction));
-                    }
-                    continue outerLoop;
-                }
-            }
-            System.err.println(String.format("Invalid -W option ignored: invalid action: '%s'",
-                    action));
-        }
-    }
-
-    private static void runModule(InteractiveConsole interp, String moduleName) {
-        runModule(interp, moduleName, false);
-    }
-
-    private static void runModule(InteractiveConsole interp, String moduleName, boolean set_argv0) {
-        // PEP 338 - Execute module as a script
-        try {
-            PyObject runpy = imp.importName("runpy", true);
-            PyObject runmodule = runpy.__findattr__("_run_module_as_main");
-            runmodule.__call__(Py.fileSystemEncode(moduleName), Py.newBoolean(set_argv0));
-        } catch (Throwable t) {
-            Py.printException(t);
-            interp.cleanup();
-            System.exit(-1);
-        }
-    }
-
-    private static boolean runMainFromImporter(InteractiveConsole interp, String filename) {
-        // Support http://bugs.python.org/issue1739468 - Allow interpreter to execute a zip file or directory
-        PyString argv0 = Py.fileSystemEncode(filename);
-        PyObject importer = imp.getImporter(argv0);
-        if (!(importer instanceof PyNullImporter)) {
-             /* argv0 is usable as an import source, so
-                put it in sys.path[0] and import __main__ */
-            Py.getSystemState().path.insert(0, argv0);
-            runModule(interp, "__main__", true);
-            return true;
-        }
-        return false;
-    }
-
+    /** Now equivalent to {@link #main(String[])}, which is to be preferred. */
+    @Deprecated
     public static void run(String[] args) {
+        main(args);
+    }
 
-        // Parse the command line options
-        CommandLineOptions opts = new CommandLineOptions();
-        if (!opts.parse(args)) {
-            if (opts.version) {
-                System.err.println("Jython " + Version.PY_VERSION);
-                System.exit(0);
-            }
-            if (opts.help) {
-                System.err.println(usage);
-            } else if (!opts.runCommand && !opts.runModule) {
-                System.err.print(usageHeader);
-                System.err.println("Try `jython -h' for more information.");
-            }
+    /** Exit Jython with status (converted to an integer). */
+    private static void exit(Status status) {
+        System.exit(status.ordinal());
+    }
 
-            int exitcode = opts.help ? 0 : -1;
-            System.exit(exitcode);
+    /**
+     * Append options from the environment variable {@code PYTHONWARNINGS}, respecting the -E
+     * option.
+     *
+     * @param opts the list to which the options are appended.
+     */
+    private static void addWarnOptionsFromEnv(PyList opts) {
+        String envVar = getenv("PYTHONWARNINGS", "");
+        for (String opt : envVar.split(",")) {
+            opt = opt.trim();
+            if (opt.length() > 0) {
+                opts.add(Py.fileSystemEncode(opt));
+            }
         }
+    }
+
+    /**
+     * Attempt to run a module as the {@code __main__} module, via a call to
+     * {@code runpy._run_module_as_main}. Exceptions raised by the imported module, including
+     * {@code SystemExit}, if not handled by {@code runpy} itself, will propagate out of this
+     * method. Note that if {@code runpy} cannot import the module it calls {@code sys.exit} with a
+     * message, which will raise {@code SystemExit} from this method.
+     *
+     * @param moduleName to run
+     * @param set_argv0 replace {@code sys.argv[0]} with the file name of the module source
+     *            {@code runpy._run_module_as_main} option.
+     * @return {@code Status.OK} on normal termination.
+     */
+    private static Status runModule(String moduleName, boolean set_argv0) {
+        // PEP 338 - Execute module as a script
+        PyObject runpy = imp.importName("runpy", true);
+        PyObject runmodule = runpy.__findattr__("_run_module_as_main");
+        // May raise SystemExit (with message)
+        runmodule.__call__(Py.fileSystemEncode(moduleName), Py.newBoolean(set_argv0));
+        return Status.OK;
+    }
+
+    /**
+     * Attempt to treat a file as a source of imports, import a module {@code __main__}, and run it.
+     * If the file is suitable (e.g. it's a directory or a ZIP archive) the method places the file
+     * first on {@code sys.path}, so that {@code __main__} and its packaged dependencies may be
+     * found in it. This permits a zip file containing Python source to be run when given as a first
+     * argument on the command line. It may be that the file is not of a type that can be imported,
+     * in which case the return indicates this.
+     *
+     * @param archive to run (FS encoded name)
+     * @return {@code Status.OK} or {@code Status.NOT_RUN} (if the file was not an archive).
+     */
+    private static Status runMainFromImporter(PyString archive) {
+        PyObject importer = imp.getImporter(archive);
+        if (!(importer instanceof PyNullImporter)) {
+            // filename is usable as an import source, so put it in sys.path[0] and import __main__
+            Py.getSystemState().path.insert(0, archive);
+            return runModule("__main__", false);
+        }
+        return Status.NOT_RUN;
+    }
+
+    /**
+     * Execute the stream {@code fp} as a file, in the given interpreter, as {@code __main__}. The
+     * file name provided must correspond to the stream. In particular, the file name extension
+     * "$py.class" will cause the stream to be interpreted as compiled code. For streams that are
+     * not really files, this name may be a conventional one like {@code "<stdin>"}, however this
+     * method will not treat a console stream as interactive.
+     *
+     * @param fp Python source code
+     * @param filename appears FS-encoded in variable {@code __file__} and in error messages
+     * @param interp to do the work
+     * @return {@code Status.OK} on normal termination.
+     */
+    // This is roughly equivalent to CPython PyRun_SimpleFileExFlags
+    private static Status runSimpleFile(InputStream fp, String filename, PythonInterpreter interp) {
+
+        // Reflect the current name in the module's __file__, compare PyRun_SimpleFileExFlags.
+        final String __file__ = "__file__";
+        PyObject globals = interp.globals;
+        PyObject previousFilename = globals.__finditem__(__file__);
+        if (previousFilename == null) {
+            globals.__setitem__(__file__,
+                    // Note that __file__ is widely expected to be encoded bytes
+                    Py.fileSystemEncode(filename));
+        }
+
+        // Allow for already-compiled target, but for us it's a $py.class not a .pyc.
+        if (filename.endsWith("$py.class")) {
+            // Jython compiled file.
+            String name = filename.substring(0, filename.length() - 6); // = - ".class"
+            try {
+                byte[] codeBytes = imp.readCode(filename, fp, false, imp.NO_MTIME);
+                File file = new File(filename);
+                PyCode code = BytecodeLoader.makeCode(name, codeBytes, file.getParent());
+                interp.exec(code);
+            } catch (IOException e) {
+                throw Py.IOError(e);
+            }
+        } else {
+            // Assume Python source file: run in the interpreter
+            interp.execfile(fp, filename);
+        }
+
+        // Delete __file__ variable, previously non-existent. Compare PyRun_SimpleFileExFlags.
+        if (previousFilename == null) {
+            globals.__delitem__(__file__);
+        }
+        return Status.OK;
+    }
+
+    /**
+     * Execute the stream {@code fp} in the given interpreter. If {@code fp} refers to a stream
+     * associated with an interactive device (console or terminal input), execute Python source
+     * statements from the stream in the interpreter as {@code __main__}. Otherwise, the file name
+     * provided must correspond to the stream, as in
+     * {@link #runSimpleFile(InputStream, String, PythonInterpreter)}.
+     *
+     * @param fp Python source code
+     * @param filename the name of the file or {@code null} meaning "???"
+     * @param interp to do the work
+     * @return {@code Status.OK} on normal termination.
+     */
+    // This is roughly equivalent to CPython PyRun_AnyFileExFlags
+    private static Status runStream(InputStream fp, String filename, InteractiveConsole interp) {
+        // Following CPython PyRun_AnyFileExFlags here, blindly, concerning null name.
+        filename = filename != null ? filename : "???";
+        // Run the contents in the interpreter
+        if (PrePy.isInteractive(fp, filename)) {
+            // __file__ not defined
+            interp.interact(null, new PyFile(fp));
+        } else {
+            // __file__ will be defined
+            runSimpleFile(fp, filename, interp);
+        }
+        return Status.OK;
+    }
+
+    /**
+     * Attempt to open the named file and execute it in the interpreter as {@code __main__}, as in
+     * {@link #runStream(InputStream, String, InteractiveConsole)}. This may raise a Python
+     * exception, including {@code SystemExit}. If the file cannot be opened, or using it throws a
+     * Java {@code IOException} that is not converted to a {@code PyException} (i.e. not within the
+     * executing code), it is reported via {@link #printError(String, Object...)}, and reflected in
+     * the return status. If the file can be opened, its parent directory will be inserted at
+     * {@code sys.argv[0]}.
+     *
+     * @param filename the name of the file or {@code null} meaning "???"
+     * @param interp to do the work
+     * @return {@code Status.OK} on normal termination, {@code Status.NO_FILE} if the file cannot be
+     *         read, or {@code Status.ERROR} on other {@code IOException}s.
+     */
+    private static Status runFile(String filename, InteractiveConsole interp) {
+        File file = new File(filename);
+        try (InputStream is = new FileInputStream(file)) {
+            String parent = file.getAbsoluteFile().getParent();
+            interp.getSystemState().path.insert(0, Py.fileSystemEncode(parent));
+            // May raise exceptions, (including SystemExit)
+            return runStream(is, filename, interp);
+        } catch (FileNotFoundException fnfe) {
+            // Couldn't open it. No point in going interactive, even if -i given.
+            printError("can't open file '%s': %s", filename, fnfe);
+            return Status.NO_FILE;
+        } catch (IOException ioe) {
+            // This may happen on the automatically-generated close()
+            printError("error closing '%s': %s", filename, ioe);
+            return Status.ERROR;
+        }
+    }
+
+    /**
+     * Attempt to execute the file named in the registry entry {@code python.startup}, which may
+     * also have been set via the environment variable {@code JYTHONSTARTUP}. This may raise a
+     * Python exception, including {@code SystemExit} that propagates to the caller. If the file
+     * cannot be opened, or using it throws a Java {@code IOException} that is not converted to a
+     * {@code PyException} (i.e. not within the executing code), it is reported via
+     * {@link #printError(String, Object...)}.
+     *
+     * @param interp to do the work
+     */
+    private static void runStartupFile(InteractiveConsole interp) {
+        String filename = PySystemState.registry.getProperty(RegistryKey.PYTHON_STARTUP, null);
+        if (filename != null) {
+            try (InputStream fp = new FileInputStream(filename)) {
+                // May raise exceptions, (including SystemExit)
+                // RunStreamOrThrow(fp, filename, interp);
+                runSimpleFile(fp, filename, interp);
+            } catch (FileNotFoundException fnfe) {
+                // Couldn't open it. No point in going interactive, even if -i given.
+                printError("Could not open startup file '%s'", filename);
+            } catch (IOException ioe) {
+                // This may happen on the automatically-generated close()
+                printError("error closing '%s': %s", filename, ioe);
+            }
+        }
+    }
+
+    /**
+     * Main Jython program, following the structure and logic of CPython {@code main.c} to produce
+     * the same behaviour. The argument to the method is the argument list supplied after the class
+     * name in the {@code java} command. Arguments up to the executable script name are options for
+     * Jython; arguments after the executable script are supplied in {@code sys.argv}. "Executable
+     * script" here means a Python source file name, a module name (following the {@code -m}
+     * option), a literal command (following the {@code -c} option), or a JAR file name (following
+     * the {@code -jar} option). As a special case of the file name, "-" is allowed, meaning take
+     * the script from standard input.
+     * <p>
+     * The main difference for the caller stems from a difference between C and Java: in C, the
+     * argument list {@code (argv)} begins with the program name, while in Java all elements of
+     * {@code (args)} are arguments to the program.
+     *
+     * @param args arguments to the program.
+     */
+    public static void main(String[] args) {
+        // Parse the command line options
+        CommandLineOptions opts = CommandLineOptions.parse(args);
+
+        // Choose the basic action
+        switch (opts.action) {
+            case VERSION:
+                System.err.printf("Jython %s\n", Version.PY_VERSION);
+                exit(Status.OK);
+            case HELP:
+                exit(usage(Status.OK));
+            case ERROR:
+                System.err.println(opts.message);
+                exit(usage(Status.ERROR));
+            case RUN:
+                // Let's run some Python! ...
+        }
+
+        // Adjust relative to the level set by java.util.logging.
+        PrePy.increaseLoggingLevel(opts.verbosity);
 
         // Get system properties (or empty set if we're prevented from accessing them)
-        Properties preProperties = PySystemState.getBaseProperties();
+        Properties preProperties = PrePy.getSystemProperties();
+        addDefaultsFromEnvironment(preProperties);
 
-        // Read environment variable PYTHONIOENCODING into properties (registry)
-        String pythonIoEncoding = getenv("PYTHONIOENCODING");
-        if (pythonIoEncoding != null) {
-            String[] spec = splitString(pythonIoEncoding, ':', 2);
-            // Note that if encoding or errors is blank (=null), the registry value wins.
-            addDefault(preProperties, PySystemState.PYTHON_IO_ENCODING, spec[0]);
-            addDefault(preProperties, PySystemState.PYTHON_IO_ERRORS, spec[1]);
+        // Treat the apparent filename "-" as no filename
+        boolean haveDash = "-".equals(opts.filename);
+        if (haveDash) {
+            opts.filename = null;
         }
 
-        // If/when we interact with standard input, will we use a line-editing console?
-        boolean stdinIsInteractive = Py.isInteractive();
+        // Sense whether the console is interactive, or we have been told to consider it so.
+        boolean stdinIsInteractive = PrePy.isInteractive(System.in, null);
 
-        // Decide if System.in is interactive
-        if (!opts.fixInteractive || opts.interactive) {
-            // The options suggest System.in is interactive: but only if isatty() agrees
-            opts.interactive = stdinIsInteractive;
-            if (opts.interactive) {
+        // Shorthand
+        boolean haveScript = opts.command != null || opts.filename != null || opts.module != null;
+
+        if (Options.inspect || !haveScript) {
+            // We'll be going interactive eventually. condition an interactive console.
+            if (PrePy.haveConsole()) {
                 // Set the default console type if nothing else has
-                addDefault(preProperties, "python.console", PYTHON_CONSOLE_CLASS);
+                addDefault(preProperties, RegistryKey.PYTHON_CONSOLE, PYTHON_CONSOLE_CLASS);
             }
         }
 
-        // Setup the basic python system state from these options
-        PySystemState.initialize(preProperties, opts.properties, opts.argv);
-        PySystemState systemState = Py.getSystemState();
+        /*
+         * Set up the executable-wide state from the options, environment and registry, and create
+         * the first instance of a sys module. We try to leave to this initialisation the things
+         * necessary to an embedded interpreter, and to do in the present method only that which
+         * belongs only to command line application.
+         *
+         * (Jython partitions system and interpreter state differently from modern CPython, which is
+         * able explicitly to create a PyInterpreterState first, after which sys and the thread
+         * state are created to hang from it.)
+         */
+        // The Jython type system will spring into existence here. This may take a while.
+        PySystemState.initialize(preProperties, opts.properties);
+        // Now we can use PyObjects safely.
+        PySystemState sys = Py.getSystemState();
 
-        PyList warnoptions = new PyList();
-        addWarnings(opts.warnoptions, warnoptions);
-        if (!Options.ignore_environment) {
-            addWarnings(warnOptionsFromEnv(), warnoptions);
-        }
-        systemState.setWarnoptions(warnoptions);
-
-        // Make sure warnings module is loaded if there are warning options
-        // Not sure this is needed, but test_warnings.py expects this
-        if (warnoptions.size() > 0) {
+        /*
+         * Jython initialisation does not load the "warnings" module. Rather we defer it to here,
+         * where we may safely prepare sys.warnoptions from the -W arguments and the contents of
+         * PYTHONWARNINGS (compare PEP 432).
+         */
+        addFSEncoded(opts.warnoptions, sys.warnoptions);
+        addWarnOptionsFromEnv(sys.warnoptions);
+        if (!sys.warnoptions.isEmpty()) {
+            // The warnings module validates (and may complain about) the warning options.
             imp.load("warnings");
         }
 
-        // Now create an interpreter
-        if (!opts.interactive) {
-            // Not (really) interactive, so do not use console prompts
-            systemState.ps1 = systemState.ps2 = Py.EmptyString;
-        }
+        /*
+         * Create the interpreter that we will use as a name space in which to execute the script or
+         * interactive session. We run site.py as part of interpreter initialisation (as CPython).
+         */
         InteractiveConsole interp = new InteractiveConsole();
 
-        // Print banner and copyright information (or not)
-        if (opts.interactive && opts.notice && !opts.runModule) {
+        if (opts.verbosity > 0 || (!haveScript && stdinIsInteractive)) {
+            // Verbose or going interactive immediately: produce sign on messages.
             System.err.println(InteractiveConsole.getDefaultBanner());
-        }
-
-        if (Py.importSiteIfSelected()) {
-            if (opts.interactive && opts.notice && !opts.runModule) {
+            if (Options.importSite) {
                 System.err.println(COPYRIGHT);
             }
         }
 
-        if (opts.division != null) {
-            if ("old".equals(opts.division)) {
-                Options.division_warning = 0;
-            } else if ("warn".equals(opts.division)) {
-                Options.division_warning = 1;
-            } else if ("warnall".equals(opts.division)) {
-                Options.division_warning = 2;
-            } else if ("new".equals(opts.division)) {
-                Options.Qnew = true;
-                interp.cflags.setFlag(CodeFlag.CO_FUTURE_DIVISION);
-            }
-        }
+        /*
+         * We currently have sys.argv = PySystemState.defaultArgv = ['']. Python has a special use
+         * for sys.argv[0] according to the source of the script (-m, -c, etc.), but the rest of it
+         * comes from the unparsed part of the command line.
+         */
+        addFSEncoded(opts.argv, sys.argv);
 
-        // was there a filename on the command line?
-        if (opts.filename != null) {
-            if (runMainFromImporter(interp, opts.filename)) {
-                interp.cleanup();
-                return;
-            }
+        /*
+         * At last, we are ready to execute something. This has two parts: execute the script or
+         * console and (if we didn't execute the console) optionally start an interactive console
+         * session. The sys.path needs to be prepared in a slightly different way for each case.
+         */
+        Status sts = Status.NOT_RUN;
 
-            String path;
-            try {
-                path = new File(opts.filename).getCanonicalFile().getParent();
-            } catch (IOException ioe) {
-                path = new File(opts.filename).getAbsoluteFile().getParent();
-            }
-            if (path == null) {
-                path = "";
-            }
-            Py.getSystemState().path.insert(0, Py.fileSystemEncode(path));
-            if (opts.jar) {
-                try {
-                    runJar(opts.filename);
-                } catch (Throwable t) {
-                    Py.printException(t);
-                    System.exit(-1);
-                }
-            } else if (opts.filename.equals("-")) {
-                try {
-                    interp.globals.__setitem__(new PyString("__file__"), new PyString("<stdin>"));
-                    interp.execfile(System.in, "<stdin>");
-                } catch (Throwable t) {
-                    Py.printException(t);
-                }
-            } else {
-                try {
-                    interp.globals.__setitem__(new PyString("__file__"),
-                            // Note that __file__ is widely expected to be encoded bytes
-                            Py.fileSystemEncode(opts.filename));
-                    FileInputStream file;
-                    try {
-                        file = new FileInputStream(new RelativeFile(opts.filename));
-                    } catch (FileNotFoundException e) {
-                        throw Py.IOError(e);
-                    }
-                    try {
-                        boolean isInteractive = false;
-                        try {
-                            isInteractive = PosixModule.getPOSIX().isatty(file.getFD());
-                        } catch (SecurityException ex) {}
-                        if (isInteractive) {
-                            opts.interactive = true;
-                            interp.interact(null, new PyFile(file));
-                            return;
-                        } else {
-                            interp.execfile(file, opts.filename);
-                        }
-                    } finally {
-                        file.close();
-                    }
-                } catch (Throwable t) {
-                    if (t instanceof PyException
-                            && ((PyException)t).match(_systemrestart.SystemRestart)) {
-                        // Shutdown this instance...
-                        shouldRestart = true;
-                        shutdownInterpreter();
-                        interp.cleanup();
-                        // ..reset the state...
-                        Py.setSystemState(new PySystemState());
-                        // ...and start again
-                        return;
-                    } else {
-                        Py.printException(t);
-                        interp.cleanup();
-                        System.exit(-1);
-                    }
-                }
-            }
-        } else {
-            // if there was no file name on the command line, then "" is the first element
-            // on sys.path. This is here because if there /was/ a filename on the c.l.,
-            // and say the -i option was given, sys.path[0] will have gotten filled in
-            // with the dir of the argument filename.
-            Py.getSystemState().path.insert(0, Py.EmptyString);
-
-            if (opts.command != null) {
-                try {
-                    interp.exec(opts.command);
-                } catch (Throwable t) {
-                    Py.printException(t);
-                    System.exit(1);
-                }
-            }
-
-            if (opts.moduleName != null) {
-                runModule(interp, opts.moduleName);
-                interp.cleanup();
-                return;
-            }
-        }
-
-        if (opts.fixInteractive || (opts.filename == null && opts.command == null)) {
-            // Go interactive with the console: the parser needs to know the encoding.
-            String encoding = Py.getConsole().getEncoding();
-            // Run the interpreter interactively
-            try {
-                interp.cflags.encoding = encoding;
-                if (!opts.interactive) {
-                    // Don't print prompts. http://bugs.jython.org/issue2325
-                    interp._interact(null, null);
-                }
-                else {
-                    interp.interact(null, null);
-                }
-            } catch (Throwable t) {
-                Py.printException(t);
-            }
-        }
-
-        interp.cleanup();
-    }
-
-    /**
-     * Run any finalizations on the current interpreter in preparation for a SytemRestart.
-     */
-    public static void shutdownInterpreter() {
-        // Stop all the active threads and signal the SystemRestart
-        thread.interruptAllThreads();
-        Py.getSystemState()._systemRestart = true;
-        // Close all sockets -- not all of their operations are stopped by
-        // Thread.interrupt (in particular pre-nio sockets)
         try {
-            imp.load("socket").__findattr__("_closeActiveSockets").__call__();
-        } catch (PyException pye) {
-            // continue
-        }
-    }
+            if (opts.command != null) {
+                // The script is an immediate command -c "..."
+                sys.argv.set(0, Py.newString("-c"));
+                sys.path.insert(0, Py.EmptyString);
+                interp.exec(opts.command);
+                sts = Status.OK;
 
-    /**
-     * Return an array of trimmed strings by splitting the argument at each occurrence of a
-     * separator character. (Helper for configuration variable processing.) Segments of zero length
-     * after trimming emerge as <code>null</code>. If there are more than the specified number of
-     * segments the last element of the array contains all of the source string after the
-     * <code>(n-1)</code>th occurrence of <code>sep</code>.
-     *
-     * @param spec to split
-     * @param sep character on which to split
-     * @param n number of parts to split into
-     * @return <code>n</code>-element array of strings (or <code>null</code>s)
-     */
-    private static String[] splitString(String spec, char sep, int n) {
-        String[] list = new String[n];
-        int p = 0, i = 0, L = spec.length();
-        while (p < L) {
-            int c = spec.indexOf(sep, p);
-            if (c < 0 || i >= n - 1) {
-                // No more seps, or no more space: i.th piece is the rest of spec.
-                c = L;
+            } else if (opts.module != null) {
+                // The script is a module
+                sys.argv.set(0, Py.newString("-m"));
+                sts = runModule(opts.module, true);
+
+            } else if (opts.filename != null) {
+                // The script is designated by file (or directory) name.
+                PyString pyFileName = Py.fileSystemEncode(opts.filename);
+                sys.argv.set(0, pyFileName);
+
+                if (opts.jar) {
+                    // The filename was given with the -jar option.
+                    sys.path.insert(0, pyFileName);
+                    runJar(opts.filename);
+                    sts = Status.OK;
+
+                } else {
+                    /*
+                     * The filename was given as the leading argument after the options. Our first
+                     * approach is to treat it as an archive (or directory) in which to find a
+                     * __main__.py (as per PEP 338). The handler for this inserts the module at
+                     * sys.path[0] if it runs. It may raise exceptions, but only SystemExit as runpy
+                     * deals with the others.
+                     */
+                    sts = runMainFromImporter(pyFileName);
+
+                    if (sts == Status.NOT_RUN) {
+                        /*
+                         * The filename was not a suitable source for import, so treat it as a file
+                         * to execute. The handler for this inserts the parent of the file at
+                         * sys.path[0].
+                         */
+                        sts = runFile(opts.filename, interp);
+                        // If we really had no script, do not go interactive at the end.
+                        haveScript = sts != Status.NO_FILE;
+                    }
+                }
+
+            } else { // filename == null
+                // There is no script. (No argument or it was "-".)
+                if (haveDash) {
+                    sys.argv.set(0, Py.newString('-'));
+                }
+                sys.path.insert(0, Py.EmptyString);
+
+                // Genuinely interactive, or just interpreting piped instructions?
+                if (stdinIsInteractive) {
+                    // If genuinely interactive, SystemExit should mean exit the application.
+                    Options.inspect = false;
+                    // If genuinely interactive, run a start-up file if one is specified.
+                    runStartupFile(interp);
+                }
+
+                // Run from console: exceptions other than SystemExit are handled in the REPL.
+                sts = runStream(System.in, "<stdin>", interp);
             }
-            String s = spec.substring(p, c).trim();
-            list[i++] = (s.length() > 0) ? s : null;
-            p = c + 1;
+
+        } catch (PyException pye) {
+            // Whatever the mode of execution an uncaught PyException lands here.
+            // If pye was SystemExit *and* Options.inspect==false, this will exit the JVM:
+            Py.printException(pye);
+            // It was an exception other than SystemExit or Options.inspect==true.
+            sts = Status.ERROR;
         }
-        return list;
+
+        /*
+         * Check this environment variable at the end, to give programs the opportunity to set it
+         * from Python.
+         */
+        if (!Options.inspect) {
+            // If set from Python, the value will be in os.environ, not Java System.getenv.
+            Options.inspect = Py.getenv("PYTHONINSPECT", "").length() > 0;
+        }
+
+        if (Options.inspect && stdinIsInteractive && haveScript) {
+            /*
+             * The inspect flag is set (-i option) so we've been asked to end with an interactive
+             * session: the console is interactive, and we have just executed some kind of script
+             * (i.e. it wasn't already an interactive session).
+             */
+            try {
+                // Ensure that this time SystemExit means exit.
+                Options.inspect = false;
+                // Run from console: exceptions other than SystemExit are handled in the REPL.
+                sts = runStream(System.in, "<stdin>", interp);
+            } catch (PyException pye) {
+                // Exception from the execution of Python code.
+                Py.printException(pye); // SystemExit will exit the JVM here.
+                sts = Status.ERROR;
+            }
+        }
+
+        /*
+         * If we arrive here then we ran some Python code. It is possible that threads we started
+         * are still running, so if the status is currently good, just return into the JVM. (This
+         * exits with good status if nothing goes wrong subsequently.)
+         */
+        if (sts != Status.OK) {
+            // Something went wrong running Python code: shut down in a tidy way.
+            interp.cleanup();
+            exit(sts);
+        }
     }
 
     /**
@@ -495,244 +707,385 @@ public class jython {
     }
 
     /**
-     * Get the value of an environment variable, if we are allowed to and it exists; otherwise
-     * return <code>null</code>. We are allowed to access the environment variable if the -E flag
-     * was not given and the application has permission to read environment variables. The -E flag
-     * is reflected in {@link Options#ignore_environment}, and will be set automatically if it turns
-     * out we do not have permission.
+     * Provides default registry entries from particular supported environment variables, obtained
+     * by calls to {@link #getenv(String)}. If a corresponding entry already exists in the
+     * properties passed, it takes precedence.
      *
-     * @param varname name to access in the environment
-     * @return the value or <code>null</code>.
+     * @param registry to be (possibly) updated
      */
-    private static String getenv(String varname) {
+    private static void addDefaultsFromEnvironment(Properties registry) {
+
+        // Pick up the path from the environment
+        addDefault(registry, "python.path", getenv("JYTHONPATH"));
+
+        // Runs at the start of each (wholly) interactive session.
+        addDefault(registry, "python.startup", getenv("JYTHONSTARTUP"));
+        // Go interactive after script. (PYTHONINSPECT because Python scripts may set it.)
+        addDefault(registry, "python.inspect", getenv("PYTHONINSPECT"));
+
+        // Read environment variable PYTHONIOENCODING into properties (registry)
+        String pythonIoEncoding = getenv("PYTHONIOENCODING");
+        if (pythonIoEncoding != null) {
+            String[] spec = pythonIoEncoding.split(":", 2);
+            // Note that if encoding or errors is blank (=null), the registry value wins.
+            addDefault(registry, RegistryKey.PYTHON_IO_ENCODING, spec[0]);
+            if (spec.length > 1) {
+                addDefault(registry, RegistryKey.PYTHON_IO_ERRORS, spec[1]);
+            }
+        }
+    }
+
+    /** The same as {@code getenv(name, null)}. */
+    private static String getenv(String name) {
+        return getenv(name, null);
+    }
+
+    /**
+     * Get the value of an environment variable, respecting {@link Options#ignore_environment} (the
+     * -E option), or return the given default if the variable is undefined or the security
+     * environment prevents access. An empty string value from the environment is treated as
+     * undefined.
+     * <p>
+     * This accesses the read-only Java copy of the system environment directly, not
+     * {@code os.environ} so that it is safe to use before Python types are available.
+     *
+     * @param name to access in the environment (if allowed by
+     *            {@link Options#ignore_environment}=={@code false}).
+     * @param defaultValue to return if {@code name} is not defined or "" or access is forbidden.
+     * @return the corresponding value or <code>defaultValue</code>.
+     */
+    private static String getenv(String name, String defaultValue) {
         if (!Options.ignore_environment) {
             try {
-                return System.getenv(varname);
+                String value = System.getenv(name);
+                return (value != null && value.length() > 0) ? value : defaultValue;
             } catch (SecurityException e) {
                 // We're not allowed to access them after all
                 Options.ignore_environment = true;
             }
         }
-        return null;
+        return defaultValue;
     }
 
-}
-
-class CommandLineOptions {
-
-    public String filename;
-    public boolean jar, notice;
-    public boolean runCommand, runModule;
-    /** True unless a file, module, jar, or command argument awaits execution. */
-    public boolean interactive = true;
-    /** Eventually go interactive: reflects the -i ("inspect") flag. */
-    public boolean fixInteractive = false;
-    public boolean help, version;
-    public String[] argv;
-    public Properties properties;
-    public String command;
-    public List<String> warnoptions = Generic.list();
-    public String encoding;
-    public String division;
-    public String moduleName;
-
-    public CommandLineOptions() {
-        filename = null;
-        jar = false;
-        notice = true;
-        runModule = false;
-        properties = new Properties();
-        help = version = false;
+    /** Non-fatal error message when ignoring unsupported option (usually one valid for CPython). */
+    private static void optionNotSupported(char option) {
+        printError("Option -%c is not supported", option);
     }
 
-    public void setProperty(String key, String value) {
-        properties.put(key, value);
-        try {
-            System.setProperty(key, value);
-        } catch (SecurityException e) {
-            // continue
+    /**
+     * Print {@code "jython: <formatted args>"} on {@code System.err} as one line.
+     *
+     * @param format suitable to use in {@code String.format(format, args)}
+     * @param args zero or more args
+     */
+    private static void printError(String format, Object... args) {
+        System.err.println(String.format("jython: " + format, args));
+    }
+
+    /**
+     * Append strings to a PyList as {@code bytes/str} objects. These might come from the command
+     * line, or any source with the possibility of non-ascii values.
+     *
+     * @param source of {@code String}s
+     * @param destination list
+     */
+    private static void addFSEncoded(Iterable<String> source, PyList destination) {
+        for (String s : source) {
+            destination.add(Py.fileSystemEncode(s));
         }
     }
 
-    private boolean argumentExpected(String arg) {
-        System.err.println("Argument expected for the " + arg + " option");
-        return false;
-    }
+    /**
+     * Class providing a parser for Jython command line options. Many of the allowable options set
+     * values directly in the static {@link Options} as the parser runs, while others set values in
+     * (an instance) of this class.
+     */
+    static class CommandLineOptions {
 
-    public boolean parse(String[] args) {
-        int index = 0;
+        /** Possible actions to take after processing the options. */
+        enum Action {
+            RUN, ERROR, HELP, VERSION
+        };
 
-        while (index < args.length && args[index].startsWith("-")) {
-            String arg = args[index];
-            if (arg.equals("-h") || arg.equals("-?") || arg.equals("--help")) {
-                help = true;
-                return false;
-            } else if (arg.equals("-V") || arg.equals("--version")) {
-                version = true;
-                return false;
-            } else if (arg.equals("-")) {
-                if (!fixInteractive) {
-                    interactive = false;
-                }
-                filename = "-";
-            } else if (arg.equals("-i")) {
-                fixInteractive = true;
-                interactive = true;
-            } else if (arg.equals("-jar")) {
-                jar = true;
-                if (!fixInteractive) {
-                    interactive = false;
-                }
-            } else if (arg.equals("-u")) {
-                Options.unbuffered = true;
-            } else if (arg.equals("-v")) {
-                Options.verbose++;
-            } else if (arg.equals("-vv")) {
-                Options.verbose += 2;
-            } else if (arg.equals("-vvv")) {
-                Options.verbose += 3;
-            } else if (arg.equals("-s")) {
-                Options.no_user_site = true;
-            } else if (arg.equals("-S")) {
-                Options.importSite = false;
-            } else if (arg.equals("-B")) {
-                Options.dont_write_bytecode = true;
-            } else if (arg.startsWith("-c")) {
-                runCommand = true;
-                if (arg.length() > 2) {
-                    command = arg.substring(2);
-                } else if ((index + 1) < args.length) {
-                    command = args[++index];
-                } else {
-                    return argumentExpected(arg);
-                }
-                if (!fixInteractive) {
-                    interactive = false;
-                }
-                index++;
-                break;
-            } else if (arg.startsWith("-W")) {
-                if (arg.length() > 2) {
-                    warnoptions.add(arg.substring(2));
-                } else if ((index + 1) < args.length) {
-                    warnoptions.add(args[++index]);
-                } else {
-                    return argumentExpected(arg);
-                }
-            } else if (arg.equals("-E")) {
-                // -E (ignore environment variables)
-                Options.ignore_environment = true;
-            } else if (arg.startsWith("-D")) {
-                String key = null;
-                String value = null;
-                int equals = arg.indexOf("=");
-                if (equals == -1) {
-                    String arg2 = args[++index];
-                    key = arg.substring(2, arg.length());
-                    value = arg2;
-                } else {
-                    key = arg.substring(2, equals);
-                    value = arg.substring(equals + 1, arg.length());
-                }
-                setProperty(key, value);
-            } else if (arg.startsWith("-Q")) {
-                if (arg.length() > 2) {
-                    division = arg.substring(2);
-                } else {
-                    division = args[++index];
-                }
-            } else if (arg.startsWith("-m")) {
-                runModule = true;
-                if (arg.length() > 2) {
-                    moduleName = arg.substring(2);
-                } else if ((index + 1) < args.length) {
-                    moduleName = args[++index];
-                } else {
-                    return argumentExpected(arg);
-                }
-                if (!fixInteractive) {
-                    interactive = false;
-                }
+        /** The action to take after processing the options. */
+        Action action = Action.RUN;
+        /** Set informatively when {@link #action}{@code ==ERROR}. */
+        String message = "";
 
-                index++;
-                int n = args.length - index + 1;
-                argv = new String[n];
-                argv[0] = moduleName;
-                for (int i = 1; index < args.length; i++, index++) {
-                    argv[i] = args[index];
-                }
-                return true;
-            } else if (arg.startsWith("-3")) {
-                Options.py3k_warning = true;
-            } else {
-                String opt = args[index];
-                if (opt.startsWith("--")) {
-                    opt = opt.substring(2);
-                } else if (opt.startsWith("-")) {
-                    opt = opt.substring(1);
-                }
-                System.err.println("Unknown option: " + opt);
-                return false;
-            }
-            index += 1;
-        }
-        notice = interactive;
-        if (filename == null && index < args.length && command == null) {
-            filename = args[index++];
-            if (!fixInteractive) {
-                interactive = false;
-            }
-            notice = false;
-        }
-        if (command != null) {
-            notice = false;
-        }
+        /** Argument to the -c option. */
+        String command;
+        /** First argument that is not an option (therefore the executable file). */
+        String filename;
+        /** Argument to the -m option. */
+        String module;
 
-        int n = args.length - index + 1;
+        /** -h or --help option. */
+        boolean help = false;
+        /** -V or --version option. */
+        boolean version = false;
+        /** -jar option. */
+        boolean jar = false;
+        /** Count of -v options. */
+        int verbosity = 0;
 
-        /* Exceptionally we allow -J-Dcpython_cmd=... also postpone the filename.
-         * E.g. the Linux launcher allows this already on launcher level for all
-         * -J flags, while the Windows launcher does not.
+        /** Collects definitions made with the -D option directly to Jython (not java -D). */
+        Properties properties = new Properties();
+
+        /** Arguments after the first non-option, therefore arguments to the executable program. */
+        List<String> argv = new LinkedList<String>();
+        /** Arguments collected from succesive -W options. */
+        List<String> warnoptions = new LinkedList<String>();
+
+        /** Valid single character options. ':' means expect an argument following. */
+        // XJD are extra to CPython. X and J are sanctioned while D may one day clash.
+        static final String PROGRAM_OPTS = "3bBc:dEhim:OQ:RsStuUvVW:x?" + "XJD:";
+
+        /** Valid long-name options. */
+        static final char JAR_OPTION = '\u2615';
+        static final OptionScanner.LongSpec[] PROGRAM_LONG_OPTS =
+                {new OptionScanner.LongSpec("--", OptionScanner.DONE),
+                        new OptionScanner.LongSpec("--help", 'h'),
+                        new OptionScanner.LongSpec("--version", 'V'),
+                        new OptionScanner.LongSpec("-jar", JAR_OPTION, true), // Yes, just one dash.
+                };
+
+        /**
+         * Parse the arguments into the static {@link Options} and a returned instance of this
+         * class.
          *
-         * Todo: Resolve this discrepancy!
-         *
-         * This is required to use cpython_cmd property in context of pip, e.g.
-         * pip install --global-option="-J-Dcpython_cmd=python" <package>
-         * For details about the cpython_cmd property, look into
-         * org.python.compiler.Module.loadPyBytecode source.
+         * @param args from program invocation.
+         * @return
          */
-        int cpython_cmd_pos = -1;
-        for (int i = index; i < args.length; i++) {
-            if (args[i].startsWith("-J-Dcpython_cmd=")) {
-                cpython_cmd_pos = i;
-                System.setProperty("cpython_cmd", args[i].substring(16));
-                n--;
-                break;
-            }
+        static CommandLineOptions parse(String args[]) {
+            CommandLineOptions opts = new CommandLineOptions();
+            opts._parse(args);
+            return opts;
         }
 
-        argv = new String[n];
-        if (filename != null) {
-            argv[0] = filename;
-        } else if (command != null) {
-            argv[0] = "-c";
-        } else {
-            argv[0] = "";
-        }
-
-        if (cpython_cmd_pos == -1) {
-            for (int i = 1; i < n; i++, index++) {
-                argv[i] = args[index];
-            }
-        } else {
-            for (int i = 1; i < n; i++, index++) {
-                if (index == cpython_cmd_pos) {
-                    index++;
+        /** Parser implementation. Do not call this twice on the same instance. */
+        private void _parse(String args[]) {
+            // Create a scanner with the right tables for Python/Jython
+            OptionScanner scanner = new OptionScanner(args, PROGRAM_OPTS, PROGRAM_LONG_OPTS);
+            _parse(scanner, args);
+            if (action == Action.RUN) {
+                // Squirrel away the unprocessed arguments
+                while (scanner.countRemainingArguments() > 0) {
+                    argv.add(scanner.getWholeArgument());
                 }
-                argv[i] = args[index];
             }
         }
 
-        return true;
+        /**
+         * Parse options into object state, until we encounter the first argument. This is a helper
+         * to {@link #_parse(String[])}.
+         */
+        private void _parse(OptionScanner scanner, String args[]) {
+            char c;
+            /*
+             * The default action is RUN, taken when we all the options have been processed, and
+             * either we have run out of arguments (we'll start an interactive session) or
+             * encountered a non-option argument, which ought to name the file to execute.
+             * Executable options (like -m and -c) cause a return with action==RUN from their case.
+             * Any errors, and some special options like --help and -V, return set some other action
+             * than RUN, ending the loop.
+             */
+            while (action == Action.RUN && (c = scanner.getOption()) != OptionScanner.DONE) {
+
+                switch (c) {
+                    /*
+                     * The first 4 cases all terminate the options in with a RUN action, meaning
+                     * that this option defines the executable script and the arguments following
+                     * will be passed to the script.
+                     */
+                    case 'c':
+                        /*
+                         * -c is the last option; following arguments that look like options are
+                         * left for the command to interpret.
+                         */
+                        command = scanner.getOptionArgument() + "\n";
+                        return;
+
+                    case 'm':
+                        /*
+                         * -m is the last option; following arguments that look like options are
+                         * left for the module to interpret.
+                         */
+                        module = scanner.getOptionArgument();
+                        return;
+
+                    case JAR_OPTION:
+                        /*
+                         * -jar is the last option; following arguments that look like options are
+                         * left for __run__.py to interpret.
+                         */
+                        jar = true;
+                        filename = scanner.getOptionArgument();
+                        return;
+
+                    case OptionScanner.ARGUMENT:
+                        /*
+                         * This should be a file name (or "-", meaning stdin); following arguments
+                         * that look like options are left for the code it contains to interpret.
+                         */
+                        filename = scanner.getWholeArgument();
+                        return;
+
+                    // Options that don't terminate option processing (mostly).
+
+                    case 'b':
+                    case 'd':
+                        optionNotSupported(c);
+                        break;
+
+                    case '3':
+                        Options.py3k_warning = true;
+                        if (Options.division_warning == 0) {
+                            Options.division_warning = 1;
+                        }
+                        break;
+
+                    case 'Q':
+                        switch (scanner.getOptionArgument()) {
+                            case "old":
+                                Options.division_warning = 0;
+                                break;
+                            case "warn":
+                                Options.division_warning = 1;
+                                break;
+                            case "warnall":
+                                Options.division_warning = 2;
+                                break;
+                            case "new":
+                                Options.Qnew = true;
+                            default:
+                                error("-Q option should be `-Qold', "
+                                        + "`-Qwarn', `-Qwarnall', or `-Qnew' only");
+                        }
+                        break;
+
+                    case 'i':
+                        Options.inspect = Options.interactive = true;
+                        break;
+
+                    case 'O':
+                        Options.optimize++;
+                        break;
+
+                    case 'B':
+                        Options.dont_write_bytecode = true;
+                        break;
+
+                    case 's':
+                        Options.no_user_site = true;
+                        break;
+
+                    case 'S':
+                        Options.no_site = true;
+                        Options.importSite = false;
+                        break;
+
+                    case 'E':
+                        Options.ignore_environment = true;
+                        break;
+
+                    case 't':
+                        optionNotSupported(c);
+                        // Py_TabcheckFlag++;
+                        break;
+
+                    case 'u':
+                        Options.unbuffered = true;
+                        break;
+
+                    case 'v':
+                        verbosity++;
+                        break;
+
+                    case 'x':
+                        optionNotSupported(c);
+                        // skipfirstline = true;
+                        break;
+
+                    // case 'X': reserved for implementation-specific arguments
+
+                    case 'U':
+                        optionNotSupported(c);
+                        // Py_UnicodeFlag++;
+                        break;
+
+                    case 'W':
+                        warnoptions.add(scanner.getOptionArgument());
+                        break;
+
+                    case 'R':
+                        optionNotSupported(c);
+                        break;
+
+                    case 'D':
+                        // Definitions made on the command line: -Dprop=v
+                        try {
+                            optionD(scanner);
+                        } catch (SecurityException e) {
+                            // Prevented by security policy.
+                        }
+                        break;
+
+                    // Options that terminate option processing with something other than RUN.
+
+                    case 'h':
+                    case '?':
+                        action = Action.HELP;
+                        break;
+
+                    case 'V':
+                        action = Action.VERSION;
+                        break;
+
+                    case 'J':
+                        /*
+                         * This shouldn't happen because the launcher should have recognised this
+                         * and converted it to an option or argument to the java command. If it
+                         * shows up here, maybe it was supplied outside the loader or the context
+                         * has confused the launcher.
+                         */
+                        error("-J is only valid when using the Jython launcher. "
+                                + "In a complex command, put the -J options early.");
+                        break;
+
+                    case OptionScanner.ERROR:
+                        error(scanner.getMessage());
+                        break;
+
+                    default:
+                        // Acceptable to the scanner, but missing from the case statement?
+                        error("parser did not recognise option -%c \\u%04x", c, c);
+                        break;
+                }
+            }
+        }
+
+        /**
+         * Helper for option {@code -Dprop=v}, adding to the "post-properties". (This is a
+         * clash-in-waiting with Python.) The effect is slightly different from {@code -J-Dprop=v},
+         * which contributes to the "pre-properties".
+         */
+        private void optionD(OptionScanner scanner) throws SecurityException {
+            String[] kv = scanner.getOptionArgument().split("=", 2);
+            String prop = kv[0].trim();
+            if (kv.length > 1) {
+                properties.put(prop, kv[1]);
+            } else {
+                properties.put(prop, "");
+            }
+        }
+
+        /**
+         * Set the error message as {@code String.format(message, args)} and set the action to
+         * {@link Action#ERROR}.
+         */
+        private void error(String message, Object... args) {
+            this.message = args.length == 0 ? message : String.format(message, args);
+            action = Action.ERROR;
+        }
     }
 }

@@ -1,9 +1,92 @@
 Jython NEWS
 
-For more details, please see https://hg.python.org/jython
+The features new in a given release are generally listed under the section for the "b1" release
+of that version.
 
-Development tip
+For more details of issue [ n ], please see https://hg.python.org/jython, or for tags [ GH-n ] see
+https://github.com/jythontools/jython
+
+Jython 2.7.3a1
   Bugs fixed
+    - [  ] 
+
+  New Features
+    - 
+
+Jython 2.7.2
+  same as 2.7.2rc1
+
+Jython 2.7.2rc1
+  Bugs fixed
+    - [ 2858 ] test_ssl failure due to embedding Bouncy Castle (doc change only)
+    - [ GH-156 ] Race condition in PyStringMap keys method
+    - [ 2862 ] Jython fails on Linux for normal user when installed by root
+
+Jython 2.7.2b3
+  Bugs fixed
+    - [ 2810 ] NoSuchMethodError in test_jython_initializer (Java 10+)
+    - [ 2808 ] lib2to3 test failures on Windows JDK 11
+    - [ 2846 ] Main module __name __ is not "__main__" under Java Scripting API
+    - [ 2828 ] Update netty JARs to 4.1.45
+    - [ 2044 ] CVE-2013-2027 Current umask sets privileges of class files and cache
+    - [ 2834 ] Import of Java classes is not thread safe
+    - [ 2820 ] Import fails with UnicodeDecodeError if sys.path contains invalid UTF-8 bytes
+    - [ 2826 ] Unicode hex string decode failure
+    - [ 2836 ] Java Swing library works only in interactive jython session
+
+Jython 2.7.2b2
+  Bugs fixed
+    - [ 2814 ] maven/build.xml does not PGP-sign the publication
+
+Jython 2.7.2b1
+  Bugs fixed
+    - [ 2806 ] Installer contains dependencies unshaded (Java 8)
+    - [ 2666 ] Oracle JDK 7 out of support so no longer available on Travis
+    - [ 2294 ] Importation of modules from directories with non-ASCII characters fails
+    - [ 2055 ] isinstance() and issubclass() fail with abc.ABCMeta
+    - [ 2569 ] jython launcher fails on Windows if JAVA_HOME is set
+    - [ 2505 ] PySystemState is lost
+    - [ 2796 ] Request for oversize arrays not handled in BaseBytes and PyByteArray
+    - [ 2730 ] datetime.strptime('%b') behaviour inconsistent with CPython on Windows JDK 9+
+    - [ 2613 ] MANIFEST.MF contains unfilled placeholders
+    - [ 2330 ] full-build fails to copy CPython License
+    - [ 2651 ] Travis builds failing with *** buffer overflow detected ***
+    - [ 2703 ] JycompileAntTask cannot find ...ant.taskdefs.MatchingTask
+    - [ 2708 ] test_urllib2net fails (on Travis CI)
+    - [ 2764 ] Readme is not displayed when using the GUI installer
+    - [ 2345 ] Installing pip fails if JYTHON_HOME points to old installation
+    - [ 2774 ] test_ssl failures from weak certificate
+    - [ 2768 ] Allow bytearray + and += to accept buffer protocol objects
+    - [ 2742 ] JARs for bouncycastle out of date (upgrade to 1.16)
+    - [ 2762 ] Upgrade Apache commons-compress to 1.18
+    - [ GH-108 ] Updates to JNR/JFFI to improve ARM HF support
+    - [ 2445 ] Eclipse's DelegatingFeatureMap has MRO conflict (and IBM's MQQueue)
+    - [ GH-121 ] Allow struct unpack and unpack_from bytearray and buffer
+    - [ 2635 ] AST.lineno ignored by compile
+    - [ 2744 ] Support buffer type in marshal.dump(s)
+    - [ 2077 ] marshal doesn't raise error when fed unmarshalable object
+    - [ 2732 ] Regression in large module support for pip
+    - [ GH-131 ] Support Unicode in zxJDBC exceptions.
+    - [ 2654 ] Imported modules allow access to submodules
+    - [ 2362 ] Import * doesn't work on JDK9 for java.*, jdk.* namespaces
+    - [ 2630 ] Cannot import java.awt.* on Java 9
+    - [ 2663 ] Remove dependency on javax.xml.bind.DatatypeConverter
+    - [ 2726 ] os.uname() throws IllegalArgumentException on Windows (Chinese localisation)
+    - [ 2719 ] Divergence of __str__ and __repr__ from CPython
+    - [ 2714 ] Locale and java version failures in test_os_jy
+    - [ GH-111 ] Proper processing of gzip trailer without resubmission
+    - [ 2231 ] __doc__ of PyString objects is always "The most base type"
+    - [ 2230 ] Jython evaluation blocks under heavy load with high multi-core systems
+    - [ 2506 ] ensurepip is reporting an error
+    - [ 1609 ] Partial parsing does not work with function decorators
+    - [ 2494 ] Support for pydoc_data
+    - [ 2492 ] NPE for PythonInterpreter after new PyInteger
+    - [ 2707 ] jython.py shebang line invalid on Linux
+    - [ 1748 ] subprocess and os.system don't show output
+    - [ 2343 ] PYTHONPATH is overwritten on Windows
+    - [ 2346 ] Launcher not resilient to bad environment variable settings
+    - [ 2709 ] test_chdir tolerates absent DOS 8.3 filename
+    - [ 2706 ] Use python.path instead of JYTHONPATH
     - [ 2410 ] Regression in PySystemStateTest (leading slash)
     - [ 2639 ] Incorrect result when using != comparison against Java {List, Set, Map}
     - [ 2672 ] Integer formatting emits two minus signs with -2^31
@@ -20,6 +103,45 @@ Development tip
     - [ 2469 ] jython launcher fails on Windows if JAVA_HOME is set
     - [ 2650 ] Detail message is not set on PyException from PythonInterpreter
     - [ 2403 ] VerifyError when implementing interfaces containing default methods (Java 8)
+    - [ 2715 ] Restrict array.array support for buffer protocol
+
+  New Features
+    - The main program behaves more like CPython in many small ways, including a more correct
+      treatment of the -i option. This simplifies support, and may also make it unnecessary for
+      users to work around differences from CPython.
+    - python.startup registry property (and JYTHONSTARTUP environment variable) added.
+    - Only the Jython command (class org.python.util.jython) now reads the environment variable
+      JYTHONPATH, not the core runtime, and it respects the -E option (ignore environment). This
+      change is for consistency with CPython and with our handling of other environment variables.
+      A pure Java application that creates its own interpreter may use the system or registry
+      key "python.path" to add to sys.path, as documented.
+    - We no longer recommend overriding toString in PyObject sub-classes as a way of defining
+      string forms. Override __repr__, and if necessary __str__, as is usual in Python. We
+      recommend toString should return the same as __str__ (or __unicode__).
+    - Experimentally, we use Gradle to build a JAR and POM that may be cited as a dependency by
+      other projects. The Jython project would like to know if this is being done suitably
+      for downstream use.
+    - The registry setting (or Java property) "python.verbose", and direct use of the global
+      org.python.core.Options.verbose are DEPRECATED: use a Java logging properties file instead.
+      Console messages are now produced via java.util.logging (JUL), and the logger "org.python"
+      or its descendants. The jython command configures a ConsoleLogger for "org.python" and by
+      default a format for messages generally similar to that in v2.7.1, preceded by the logger
+      name and JUL severity. The volume of messages is controlled by your logging preferences, but
+      by default is unchanged from v2.7.1. Each -v option on the command line makes the logging
+      one step finer on the JUL scale. Error messages from Python and stack traces are unaffected.
+      When embedded in your application, Jython makes no logging configuration changes: messages
+      from the "org.python" name space merge with those of your application.
+    - There is much improved support for locale, but as a backward-incompatible change, it is
+      provided as an opt-in. Define property python.locale.control=settable on the command line
+      or via the Jython registry, to enable. This  may become the default in a later version.
+    - The default location of the Jython package cache has moved from the installation directory
+      to the current working directory and is called ".jython_cache". Previously, Jython installed
+      system-wide either exposed the cache as world read-write (a security risk) or disabled it.
+    - BouncyCastle SSL support is incomplete as bundled. The Jython JAR is not signed, and may not
+      be trusted by your JVM as a security provider. This manifests as a PEMException: "Unable to
+      create OpenSSL PBDKF: PBKDF-OpenSSL SecretKeyFactory not available" during certain
+      operations. If this is a problem, place genuine BouncyCastle JARs on the class path, and
+      Jython will use those in preference to the classes we include. The slim JAR is not affected.
 
 Jython 2.7.2a1
   Bugs fixed
@@ -119,7 +241,7 @@ Jython 2.7.1rc1
     - [ 2533 ] Opcode.java is outdated -> breaks PyBytecode.interpret
     - [ 2502 ] Missing OpenFlags enum entry makes Jython clash with JRuby dependency
     - [ 2446 ] Support SNI for SSL/TLS client sockets
-    - [ PR50 ] Calling Java vararg methods with no arguments fails
+    - [ GH-50 ] Calling Java vararg methods with no arguments fails
     - [ 2455 ] Java classes in packages with __init__.py not found
     - [ 2481 ] Update urllib2.py from 2.7.11
     - [ 2514 ] Jython Class.__subclasses__() does not match Python output (not in load order)

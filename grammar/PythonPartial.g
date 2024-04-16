@@ -116,12 +116,15 @@ private ErrorHandler errorHandler;
     }
 
     /**
-     *  Taken directly from antlr's Lexer.java -- needs to be re-integrated every time
-     *  we upgrade from Antlr (need to consider a Lexer subclass, though the issue would
-     *  remain).
+     * The text of this is mostly taken directly from ANTLR's Lexer.java,
+     * and ought to track changes there each time we get a new version,
+     * ... if there are any after 3.5.2. Also in PythonPartial.g.
      */
+    @Override
     public Token nextToken() {
+        // -- begin Jython addition
         startPos = getCharPositionInLine();
+        // -- end Jython addition
         while (true) {
             state.token = null;
             state.channel = Token.DEFAULT_CHANNEL;
@@ -130,10 +133,12 @@ private ErrorHandler errorHandler;
             state.tokenStartLine = input.getLine();
             state.text = null;
             if ( input.LA(1)==CharStream.EOF ) {
+                // -- begin Jython addition
                 if (implicitLineJoiningLevel > 0) {
                     eofWhileNested = true;
                 }
-                return Token.EOF_TOKEN;
+                // -- end Jython addition
+                return getEOFToken();
             }
             try {
                 mTokens();
@@ -144,18 +149,28 @@ private ErrorHandler errorHandler;
                     continue;
                 }
                 return state.token;
+                // -- begin Jython addition
             } catch (NoViableAltException nva) {
                 errorHandler.reportError(this, nva);
                 errorHandler.recover(this, nva); // throw out current char and try again
             } catch (FailedPredicateException fp) {
-                //XXX: added this for failed STRINGPART -- the FailedPredicateException
-                //     hides a NoViableAltException.  This should be the only
-                //     FailedPredicateException that gets thrown by the lexer.
+                // Added this for failed STRINGPART -- the FailedPredicateException
+                // hides a NoViableAltException. This should be the only
+                // FailedPredicateException that gets thrown by the lexer.
                 errorHandler.reportError(this, fp);
                 errorHandler.recover(this, fp); // throw out current char and try again
-            } catch (RecognitionException re) {
-                errorHandler.reportError(this, re);
+                // -- end Jython addition
+            } catch (MismatchedRangeException re) {
+                reportError(re);
+                // matchRange() routine has already called recover()
+            } catch (MismatchedTokenException re) {
+                reportError(re);
                 // match() routine has already called recover()
+            } catch (RecognitionException re) {
+                // -- Jython replaces: reportError(this, re) with:
+                errorHandler.reportError(this, re);
+                // -- end Jython replacement
+                recover(re); // throw out current char and try again
             }
         }
     }
@@ -172,7 +187,7 @@ single_input
 
 //eval_input: testlist NEWLINE* ENDMARKER
 eval_input
-    : LEADING_WS? (NEWLINE)* testlist? (NEWLINE)* EOF
+    : LEADING_WS? (NEWLINE)* (testlist (NEWLINE)*)? EOF
     ;
 
 //not in CPython's Grammar file
@@ -729,7 +744,7 @@ atom
        |
        )
        RCURLY
-     | BACKQUOTE testlist BACKQUOTE
+     | BACKQUOTE testlist1 BACKQUOTE
      | NAME
      | INT
      | LONGINT
@@ -890,6 +905,12 @@ comp_for
 //comp_if: 'if' old_test [comp_iter]
 comp_if
     : IF test comp_iter?
+    ;
+
+// Variant of testlist used between BACKQUOTEs (the deprecated back-tick repr()) only
+//testlist1: test (',' test)*
+testlist1
+    : test (COMMA test)*
     ;
 
 //yield_expr: 'yield' [testlist]
@@ -1091,13 +1112,13 @@ STRINGPART
 /** the two '"'? cause a warning -- is there a way to avoid that? */
 fragment
 TRIQUOTE
-    : '"'? '"'? (ESC|~('\\'|'"'))+
+    : ('"' '"'?)? (ESC|~('\\'|'"'))+
     ;
 
 /** the two '\''? cause a warning -- is there a way to avoid that? */
 fragment
 TRIAPOS
-    : '\''? '\''? (ESC|~('\\'|'\''))+
+    : ('\'' '\''?)? (ESC|~('\\'|'\''))+
     ;
 
 fragment
@@ -1118,7 +1139,7 @@ CONTINUED_LINE
          | nl=NEWLINE
            {
                extraNewlines = true;
-           }        
+           }
          |
          ) {
                if (input.LA(1) == -1) {

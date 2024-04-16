@@ -38,17 +38,17 @@ import java.util.*;
  This is an interesting lexical problem because multiple DEDENT
  tokens should be sent to the parser sometimes without a corresponding
  input symbol!  Consider the following example:
-
+ <pre>{@literal
  a=1
  if a>1:
      print a
  b=3
-
+}</pre>
  Here the "b" token on the left edge signals that a DEDENT is needed
  after the "print a \n" and before the "b".  The sequence should be
-
+<pre>
  ... 1 COLON NEWLINE INDENT PRINT a NEWLINE DEDENT b ASSIGN 3 ...
-
+</pre>
  For more examples, see the big comment at the bottom of this file.
 
  This TokenStream normally just passes tokens through to the parser.
@@ -131,12 +131,15 @@ public class PythonTokenSource implements TokenSource {
      EOF to have char pos 0 even though with UNIX it's hard to get EOF
      at a non left edge.
      */
+    @Override
     public Token nextToken() {
         // if something in queue, just remove and return it
         if (tokens.size() > 0) {
             Token t = tokens.firstElement();
-            tokens.removeElementAt(0);
-            //System.out.println(filename + t);
+            if (t.getType() != Token.EOF) { // EOF stops further insertImaginaryIndentDedentTokens
+                tokens.removeElementAt(0);
+            }
+            // System.out.println(filename + t);
             return t;
         }
 
@@ -165,7 +168,6 @@ public class PythonTokenSource implements TokenSource {
 
     protected void insertImaginaryIndentDedentTokens() {
         Token t = stream.LT(1);
-        stream.consume();
 
         if (t.getType() == Token.EOF) {
             Token prev = stream.LT(-1);
@@ -187,13 +189,12 @@ public class PythonTokenSource implements TokenSource {
         } else if (t.getType() == PythonLexer.NEWLINE) {
             // save NEWLINE in the queue
             //System.out.println("found newline: "+t+" stack is "+stackString());
-            enqueueHiddens(t);
-            tokens.addElement(t);
+            enqueue(t);
             Token newline = t;
+            stream.consume();
 
             // grab first token of next line
             t = stream.LT(1);
-            stream.consume();
 
             List<Token> commentedNewlines = enqueueHiddens(t);
 
@@ -204,13 +205,15 @@ public class PythonTokenSource implements TokenSource {
                 cpos = -1; // pretend EOF always happens at left edge
             }
             else if (t.getType() == PythonLexer.LEADING_WS) {
+                stream.consume();
                 Token next = stream.LT(1);
                 if (next != null && next.getType() == Token.EOF) {
-                    stream.consume();
                     return;
                 } else {
                     cpos = t.getText().length();
                 }
+            } else {
+                stream.consume();
             }
 
             //System.out.println("next token is: "+t);
@@ -241,9 +244,10 @@ public class PythonTokenSource implements TokenSource {
 
         } else {
             enqueue(t);
+            stream.consume();
         }
     }
-    
+
     private void enqueue(Token t) {
         enqueueHiddens(t);
         tokens.addElement(t);
@@ -276,7 +280,9 @@ public class PythonTokenSource implements TokenSource {
                 }
             }
         }
-        List<Token> hiddenTokens = stream.getTokens(lastTokenAddedIndex + 1,t.getTokenIndex() - 1);
+
+        List<? extends Token> hiddenTokens =
+                stream.getTokens(lastTokenAddedIndex + 1, t.getTokenIndex() - 1);
         if (hiddenTokens != null) {
             tokens.addAll(hiddenTokens);
         }
@@ -361,6 +367,7 @@ public class PythonTokenSource implements TokenSource {
         return buf.toString();
     }
 
+    @Override
     public String getSourceName() {
         return filename;
     }
@@ -378,13 +385,13 @@ a a \n INDENT b b \n c \n DEDENT d \n EOF
 a  c
  b
 c
-a c \n INDENT b \n DEDENT c \n EOF 
+a c \n INDENT b \n DEDENT c \n EOF
 ------- t3 -------
 a
         b
                 c
 d
-a \n INDENT b \n INDENT c \n DEDENT DEDENT d \n EOF 
+a \n INDENT b \n INDENT c \n DEDENT DEDENT d \n EOF
 ------- t4 -------
 a
     c
@@ -396,12 +403,12 @@ a
              i
               j
     k
-a \n INDENT c \n INDENT d \n DEDENT e \n f \n INDENT g \n h \n i \n INDENT j \n DEDENT DEDENT k \n DEDENT EOF 
+a \n INDENT c \n INDENT d \n DEDENT e \n f \n INDENT g \n h \n i \n INDENT j \n DEDENT DEDENT k \n DEDENT EOF
 ------- t5 -------
 a
         b
         c
                 d
                 e
-a \n INDENT b \n c \n INDENT d \n e \n DEDENT DEDENT EOF 
+a \n INDENT b \n c \n INDENT d \n e \n DEDENT DEDENT EOF
 */

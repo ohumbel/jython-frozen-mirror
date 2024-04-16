@@ -16,8 +16,8 @@ class ByteArraySubclassTest(unittest.TestCase):
         self.assertEqual(len(s), 6)
 
 
-class SimpleOperationsTest(unittest.TestCase):
-    # Things the CPython library did not test throughly enough
+class BytesOperationsTest(unittest.TestCase):
+    # Tests additional to the CPython library, on bytes/str
 
     def test_irepeat(self) :
 
@@ -70,7 +70,7 @@ class SimpleOperationsTest(unittest.TestCase):
     LOWER = b'\xe0\xe7\xe9\xff' # Uppercase in Latin-1 but not ascii
     UPPER = b'\xc0\xc7\xc9\xdd' # Lowercase in Latin-1 but not ascii
     DIGIT = b'\xb9\xb2\xb3'     # sup 1, 2, 3: numeric in Python (not Java)
-    SPACE = b'\x85\xa0'         # NEXT LINE, NBSP: space in Python (not Java)
+    SPACE = b'\x85\xa0'         # NEXT LINE, NBSP: space in unicode (not in str/bytes)
 
     def test_isalpha(self):
         for c in self.UPPER + self.LOWER:
@@ -178,10 +178,83 @@ class SimpleOperationsTest(unittest.TestCase):
             self.assertEqual(1, len(s.rsplit()), "rsplit made in " + repr(s))
 
 
+class BufferOperationsTest(unittest.TestCase):
+    # Tests additional to the CPython library, on buffer
+
+    def test_repr(self):
+        # Exact form of buffer.__repr__
+        text = u"Le dîner à Étretat".encode('latin-1')
+        buf = buffer(text)
+        expected = r"<read-only buffer for 0x[0-9a-fA-F]+, size -1, offset 0 at 0x[0-9a-fA-F]+>"
+        self.assertRegexpMatches(repr(buf), expected)
+        self.assertRegexpMatches(buf.__repr__(), expected)
+
+    def test_str(self):
+        # Exact form of buffer.__str__
+        text = u"Le dîner à Étretat".encode('latin-1')
+        buf = buffer(text)
+        expected = text
+        self.assertEqual(str(buf), expected)
+        self.assertEqual(buf.__str__(), expected)
+
+    def test_add_memoryview(self):
+        b = buffer(b"abc")
+        # add memoryview
+        c = b + memoryview('xyz')
+        self.assertEqual(str(c), 'abcxyz')
+
+    def test_add_bytearray(self):
+        b = buffer(b"abc")
+        # add bytearray
+        b += bytearray('xyz')
+        self.assertEqual(str(b), 'abcxyz')
+
+    def test_iadd_memoryview(self):
+        b = buffer(b"abc")
+        # concatenate memoryview
+        b += memoryview('xyz')
+        self.assertEqual(str(b), 'abcxyz')
+
+    def test_iadd_bytearray(self):
+        b = buffer(b"abc")
+        # concatenate bytearray
+        b += bytearray('xyz')
+        self.assertEqual(str(b), 'abcxyz')
+
+
+class ByteArrayTest(unittest.TestCase):
+    # Tests additional to the CPython library, on bytearray
+
+    def test_add_memoryview(self):
+        b = bytearray(b"abc")
+        # add memoryview
+        c = b + memoryview('xyz')
+        self.assertEqual(str(c), 'abcxyz')
+
+    def test_add_buffer(self):
+        b = bytearray(b"abc")
+        # add buffer
+        c = b + buffer('xyz')
+        self.assertEqual(str(c), 'abcxyz')
+
+    def test_iadd_memoryview(self):
+        b = bytearray(b"abc")
+        # concatenate memoryview
+        b += memoryview('xyz')
+        self.assertEqual(str(b), 'abcxyz')
+
+    def test_iadd_buffer(self):
+        b = bytearray(b"abc")
+        # concatenate buffer
+        b += buffer('xyz')
+        self.assertEqual(str(b), 'abcxyz')
+
 def test_main():
     test.test_support.run_unittest(
             ByteArraySubclassTest,
-            SimpleOperationsTest,
+            BytesOperationsTest,
+            BufferOperationsTest,
+            ByteArrayTest
         )
 
 

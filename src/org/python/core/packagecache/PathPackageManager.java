@@ -3,25 +3,25 @@
 
 package org.python.core.packagecache;
 
-import org.python.core.imp;
-import org.python.core.Py;
-import org.python.core.PyJavaPackage;
-import org.python.core.PyList;
-import org.python.core.PyObject;
-import org.python.core.PyString;
-import org.python.core.PyUnicode;
-import org.python.core.util.RelativeFile;
-
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.util.logging.Level;
+
+import org.python.core.Py;
+import org.python.core.PyException;
+import org.python.core.PyJavaPackage;
+import org.python.core.PyList;
+import org.python.core.PyObject;
+import org.python.core.PyString;
+import org.python.core.imp;
+import org.python.core.util.RelativeFile;
 
 /**
- * Path package manager. Gathering classes info dynamically from a set of
- * directories in path {@link #searchPath}, and statically from a set of jars,
- * like {@link CachedJarsPackageManager}.
+ * Path package manager. Gathering classes info dynamically from a set of directories in path
+ * {@link #searchPath}, and statically from a set of jars, like {@link CachedJarsPackageManager}.
  */
 public abstract class PathPackageManager extends CachedJarsPackageManager {
 
@@ -32,95 +32,93 @@ public abstract class PathPackageManager extends CachedJarsPackageManager {
     }
 
     /**
-     * Helper for {@link #packageExists(java.lang.String,java.lang.String)}.
-     * Scans for package pkg.name the directories in path.
+     * Helper for {@link #packageExists(String,String)}. Scans the directories in the given path for
+     * package pkg.name. A directory with a matching name is considered to define a package if it
+     * contains no Python (source or compiled), or contains a Java .class file (not compiled from
+     * Python).
      */
-    protected boolean packageExists(PyList path, String pkg, String name) {
-        String child = pkg.replace('.', File.separatorChar) + File.separator
-                + name;
+    protected static boolean packageExists(PyList path, String pkg, String name) {
+        String child = pkg.replace('.', File.separatorChar) + File.separator + name;
 
         for (int i = 0; i < path.__len__(); i++) {
-            // Each entry in the path may be byte-encoded or unicode
+
             PyObject entry = path.pyget(i);
-            String dir = Py.fileSystemDecode(entry);
-            File f = new RelativeFile(dir, child);
-            try {
-                if (f.isDirectory() && imp.caseok(f, name)) {
-                    /*
-                     * Figure out if we have a directory a mixture of python and
-                     * java or just an empty directory (which means Java) or a
-                     * directory with only Python source (which means Python).
-                     */
-                    PackageExistsFileFilter m = new PackageExistsFileFilter();
-                    f.listFiles(m);
-                    boolean exists = m.packageExists();
-                    if (exists) {
-                        Py.writeComment("import", "java package as '"
-                                + f.getAbsolutePath() + "'");
+
+            // Each entry in the path may be byte-encoded or unicode
+            String dir = imp.fileSystemDecode(entry, false);
+            if (dir != null) {
+                File f = new RelativeFile(dir, child);
+                try {
+                    if (f.isDirectory() && imp.caseok(f, name)) {
+                        /*
+                         * f is a directory matching the package name. This directory is considered
+                         * to define a package if it contains no Python (source or compiled), or
+                         * contains a Java .class file (not compiled from Python).
+                         */
+                        PackageExistsFileFilter m = new PackageExistsFileFilter();
+                        f.listFiles(m);
+                        boolean exists = m.packageExists();
+                        if (exists) {
+                            logger.log(Level.CONFIG, "# trying {0}", f.getAbsolutePath());
+                        }
+                        return exists;
                     }
-                    return exists;
+                } catch (SecurityException se) {
+                    return false;
                 }
-            } catch (SecurityException se) {
-                return false;
             }
         }
         return false;
     }
 
     private static class PackageExistsFileFilter implements FilenameFilter {
-        private boolean java;
 
+        private boolean java;
         private boolean python;
 
         @Override
         public boolean accept(File dir, String name) {
-            if(name.endsWith(".py") || name.endsWith("$py.class") || name.endsWith("$_PyInner.class")) {
+            if (name.endsWith(".py") || name.endsWith("$py.class")
+                    || name.endsWith("$_PyInner.class")) {
                 python = true;
-            }else if (name.endsWith(".class")) {
+            } else if (name.endsWith(".class")) {
                 java = true;
             }
             return false;
         }
 
         public boolean packageExists() {
-            if (this.python && !this.java) {
-                return false;
-            }
-            return true;
+            return !python || java;
         }
     }
 
     /**
-     * Helper for {@link #doDir(PyJavaPackage,boolean,boolean)}. Scans for
-     * package jpkg content over the directories in path. Add to ret the found
-     * classes/pkgs. Filter out classes using {@link #filterByName},{@link #filterByAccess}.
+     * Helper for {@link #doDir(PyJavaPackage,boolean,boolean)}. Scans for package jpkg content over
+     * the directories in path. Add to ret the found classes/pkgs. Filter out classes using
+     * {@link #filterByName},{@link #filterByAccess}.
      */
-    protected void doDir(PyList path, PyList ret, PyJavaPackage jpkg,
-            boolean instantiate, boolean exclpkgs) {
+    protected void doDir(PyList path, PyList ret, PyJavaPackage jpkg, boolean instantiate,
+            boolean exclpkgs) {
+
         String child = jpkg.__name__.replace('.', File.separatorChar);
 
         for (int i = 0; i < path.__len__(); i++) {
             // Each entry in the path may be byte-encoded or unicode
             String dir = Py.fileSystemDecode(path.pyget(i));
-
             if (dir.length() == 0) {
                 dir = null;
             }
 
             File childFile = new File(dir, child);
-
             String[] list = childFile.list();
             if (list == null) {
                 continue;
             }
 
-            doList: for (int j = 0; j < list.length; j++) {
+            doList : for (int j = 0; j < list.length; j++) {
                 String jname = list[j];
-
                 File cand = new File(childFile, jname);
-
                 int jlen = jname.length();
-
                 boolean pkgCand = false;
 
                 if (cand.isDirectory()) {
@@ -160,8 +158,7 @@ public abstract class PathPackageManager extends CachedJarsPackageManager {
 
                 if (!pkgCand) {
                     try {
-                        int acc = checkAccess(new BufferedInputStream(
-                                new FileInputStream(cand)));
+                        int acc = checkAccess(new BufferedInputStream(new FileInputStream(cand)));
                         if ((acc == -1) || filterByAccess(jname, acc)) {
                             continue;
                         }
@@ -179,15 +176,11 @@ public abstract class PathPackageManager extends CachedJarsPackageManager {
                 }
 
                 ret.append(name);
-
             }
         }
-
     }
 
-    /**
-     * Add directory dir (if exists) to {@link #searchPath}.
-     */
+    /** Add directory dir (if exists) to {@link #searchPath}. */
     @Override
     public void addDirectory(File dir) {
         try {
@@ -197,27 +190,20 @@ public abstract class PathPackageManager extends CachedJarsPackageManager {
                 this.searchPath.append(Py.newStringOrUnicode(dir.getCanonicalPath()));
             }
         } catch (IOException e) {
-            warning("skipping bad directory, '" + dir + "'");
+            warning("# skipping bad directory {0} ({1})", dir, e.getMessage());
         }
     }
 
-    // ??pending:
-    // Uses simply split and not a StringTokenizer+trim to adhere to
-    // sun jvm parsing of classpath.
-    // E.g. "a;" is parsed by sun jvm as a, ""; the latter is interpreted
-    // as cwd. jview trims and cwd is per default in classpath.
-    // The logic here should work for both(...). Need to distinguish?
-    // This code does not avoid duplicates in searchPath.
-    // Should cause no problem (?).
-
     /**
-     * Adds "classpath" entry. Calls {@link #addDirectory} if path refers to a
-     * dir, {@link #addJarToPackages(java.io.File, boolean)} with param cache
-     * true if path refers to a jar.
+     * Scan a Java class-path that may be a mixture of directory and JAR specifiers, and within each
+     * path entry index the packages. Calls {@link #addDirectory} if a path entry refers to a dir,
+     * {@link #addJarToPackages(java.io.File, boolean)} with param cache true if the path entry
+     * refers to a jar.
      */
     public void addClassPath(String path) {
-        String[] paths = path.split(java.io.File.pathSeparator);
-        for (String entry: paths) {
+        String[] entries = path.split(java.io.File.pathSeparator);
+        for (String entry : entries) {
+            entry = entry.trim();
             if (entry.endsWith(".jar") || entry.endsWith(".zip")) {
                 addJarToPackages(new File(entry), true);
             } else {
@@ -230,13 +216,10 @@ public abstract class PathPackageManager extends CachedJarsPackageManager {
     }
 
     @Override
-    public PyList doDir(PyJavaPackage jpkg, boolean instantiate,
-            boolean exclpkgs) {
+    public PyList doDir(PyJavaPackage jpkg, boolean instantiate, boolean exclpkgs) {
         PyList basic = basicDoDir(jpkg, instantiate, exclpkgs);
         PyList ret = new PyList();
-
         doDir(this.searchPath, ret, jpkg, instantiate, exclpkgs);
-
         return merge(basic, ret);
     }
 

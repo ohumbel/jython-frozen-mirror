@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.util.Enumeration;
 import java.util.Map;
 import java.util.Properties;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -15,19 +17,20 @@ import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 
+import org.python.Version;
+import org.python.core.PrePy;
 import org.python.core.Py;
 import org.python.core.PyException;
 import org.python.core.PyObject;
 import org.python.core.PyString;
-import org.python.core.PyStringMap;
 import org.python.core.PySystemState;
 
 /**
  * This servlet is used to re-serve Jython servlets. It stores bytecode for Jython servlets and
  * re-uses it if the underlying .py file has not changed.
  * <p>
- * e.g. http://localhost:8080/test/hello.py
- * <pre>
+ * e.g. {@code http://localhost:8080/test/hello.py}
+ * <pre>{@literal
  *
  * from javax.servlet.http import HttpServlet
  * class hello(HttpServlet):
@@ -40,28 +43,29 @@ import org.python.core.PySystemState;
  *         print >>out, "</body>"
  *         print >>out, "</html>"
  *         out.close()
- * </pre>
+ * }</pre>
  *
  * in web.xml for the PyServlet context:
- * <pre>
- * &lt;web-app>
- *     &lt;servlet>
- *         &lt;servlet-name>PyServlet&lt;/servlet-name>
- *         &lt;servlet-class>org.python.util.PyServlet&lt;/servlet-class>
- *         &lt;init-param>
- *             &lt;param-name>python.home&lt;/param-name>
- *             &lt;param-value>/usr/home/jython-2.5&lt;/param-value>
- *         &lt;/init-param>
- *     &lt;/servlet>
- *     &lt;servlet-mapping>
- *         &lt;servlet-name>PyServlet&lt;/servlet-name>
- *         &lt;url-pattern>*.py&lt;/url-pattern>
- *     &lt;/servlet-mapping>
- * &lt;/web-app>
- *
- * </pre>
+ * <pre>{@literal
+ * <web-app>
+ *     <servlet>
+ *         <servlet-name>PyServlet</servlet-name>
+ *         <servlet-class>org.python.util.PyServlet</servlet-class>
+ *         <init-param>
+ *             <param-name>python.home</param-name>
+ *             <param-value>/usr/home/jython-2.5</param-value>
+ *         </init-param>
+ *     </servlet>
+ *     <servlet-mapping>
+ *         <servlet-name>PyServlet</servlet-name>
+ *         <url-pattern>*.py</url-pattern>
+ *     </servlet-mapping>
+ * </web-app>
+ * }</pre>
  */
 public class PyServlet extends HttpServlet {
+
+    protected static final Logger logger = Logger.getLogger("org.python.servlet");
 
     public static final String SKIP_INIT_NAME = "skip_jython_initialization";
 
@@ -69,20 +73,27 @@ public class PyServlet extends HttpServlet {
 
     @Override
     public void init() {
-        Properties props = new Properties();
+        logger.log(Level.INFO, "Jython {0} servlet {1}",
+                new Object[] {Version.PY_VERSION, getServletName()});
+
         // Config parameters
+        Properties props = new Properties();
         Enumeration<?> e = getInitParameterNames();
         while (e.hasMoreElements()) {
             String name = (String)e.nextElement();
             props.put(name, getInitParameter(name));
         }
+
         boolean initialize = getServletConfig().getInitParameter(SKIP_INIT_NAME) != null;
+
         if (getServletContext().getAttribute(INIT_ATTR) != null) {
             if (initialize) {
-                System.err.println("Jython has already been initialized in this context, not "
-                        + "initializing for " + getServletName() + ".  Add " + SKIP_INIT_NAME
-                        + " to as an init param to this servlet's configuration to indicate this "
-                        + "is expected.");
+                logger.log(Level.WARNING, //
+                        "Jython has already been initialized in this context."
+                                + " Not initializing for ''{0}''."
+                                + " Add {1} as an init param to this servlet''s configuration"
+                                + " to indicate this is expected.",
+                        new Object[] {getServletName(), SKIP_INIT_NAME});
             }
         } else if (initialize) {
             init(props, getServletContext());
@@ -96,9 +107,11 @@ public class PyServlet extends HttpServlet {
      * context, the system state initialization code only runs once.
      */
     protected static void init(Properties props, ServletContext context) {
+
         String rootPath = getRootPath(context);
         context.setAttribute(INIT_ATTR, true);
-        Properties baseProps = PySystemState.getBaseProperties();
+        Properties baseProps = PrePy.getSystemProperties();
+
         // Context parameters
         Enumeration<?> e = context.getInitParameterNames();
         while (e.hasMoreElements()) {
@@ -109,6 +122,7 @@ public class PyServlet extends HttpServlet {
                 && baseProps.getProperty("python.home") == null) {
             props.put("python.home", rootPath + "WEB-INF" + File.separator + "lib");
         }
+
         PySystemState.initialize(baseProps, props, new String[0]);
         PySystemState.add_package("javax.servlet");
         PySystemState.add_package("javax.servlet.http");
@@ -237,7 +251,7 @@ public class PyServlet extends HttpServlet {
         public HttpServlet servlet;
 
         CacheEntry(HttpServlet servlet, long date) {
-            this.servlet=  servlet;
+            this.servlet = servlet;
             this.date = date;
         }
     }

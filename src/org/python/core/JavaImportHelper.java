@@ -16,17 +16,18 @@ public class JavaImportHelper {
     /**
      * Try to add the java package.
      * <p>
-     * This is handy in cases where the package scan cannot run, or when the initial classpath does not contain all .jar
-     * files (such as in J2EE containers).
+     * This is handy in cases where the package scan cannot run, or when the initial classpath does
+     * not contain all .jar files (such as in J2EE containers).
      * <p>
-     * There is some self-healing in the sense that a correct, explicit import of a java class will succeed even if
-     * sys.modules already contains a Py.None entry for the corresponding java package.
-     * 
+     * There is some self-healing in the sense that a correct, explicit import of a java class will
+     * succeed even if sys.modules already contains a Py.None entry for the corresponding java
+     * package.
+     *
      * @param packageName The dotted name of the java package
      * @param fromlist A tuple with the from names to import. Can be null or empty.
-     * 
-     * @return <code>true</code> if a java package was doubtlessly identified and added, <code>false</code>
-     * otherwise.
+     *
+     * @return <code>true</code> if a java package was doubtlessly identified and added,
+     *         <code>false</code> otherwise.
      */
     protected static boolean tryAddPackage(final String packageName, PyObject fromlist) {
         // make sure we do not turn off the added flag, once it is set
@@ -40,7 +41,6 @@ public class JavaImportHelper {
             for (String fromName : stringFromlist) {
                 if (isJavaClass(packageName, fromName)) {
                     packageAdded = addPackage(packageName, packageAdded);
-
                 }
             }
 
@@ -91,11 +91,11 @@ public class JavaImportHelper {
      * Check if a java package is already known to the VM.
      * <p>
      * May return <code>false</code> even if the given package name is a valid java package !
-     * 
+     *
      * @param packageName
-     * 
-     * @return <code>true</code> if the package with the given name is already loaded by the VM, <code>false</code>
-     * otherwise.
+     *
+     * @return <code>true</code> if the package with the given name is already loaded by the VM,
+     *         <code>false</code> otherwise.
      */
     protected static boolean isLoadedPackage(String packageName) {
         return isLoadedPackage(packageName, buildLoadedPackages());
@@ -105,7 +105,7 @@ public class JavaImportHelper {
      * Convert the fromlist into a java.lang.String based list.
      * <p>
      * Do some sanity checks: filter out '*' and empty tuples, as well as non tuples.
-     * 
+     *
      * @param fromlist
      * @return a list containing java.lang.String entries
      */
@@ -134,13 +134,13 @@ public class JavaImportHelper {
      * Faster way to check if a java package is already known to the VM.
      * <p>
      * May return <code>false</code> even if the given package name is a valid java package !
-     * 
+     *
      * @param packageName
-     * @param packages A Map containing all packages actually known to the VM. Such a Map can be obtained using
-     * {@link JavaImportHelper.buildLoadedPackagesTree()}
-     * 
-     * @return <code>true</code> if the package with the given name is already loaded by the VM, <code>false</code>
-     * otherwise.
+     * @param packages A Map containing all packages actually known to the VM. Such a Map can be
+     *            obtained using {@link JavaImportHelper.buildLoadedPackagesTree()}
+     *
+     * @return <code>true</code> if the package with the given name is already loaded by the VM,
+     *         <code>false</code> otherwise.
      */
     private static boolean isLoadedPackage(String javaPackageName, Map<String, String> packages) {
         boolean isLoaded = false;
@@ -175,8 +175,9 @@ public class JavaImportHelper {
     }
 
     /**
-     * @return <code>true</code> if the java class can be found by the current
-     *         Py classloader setup
+     * Try to load <i>packageName.className</i> and return {@code true} if successful.
+     *
+     * @return <code>true</code> if the java class can be found by the current Py classloader setup
      */
     private static boolean isJavaClass(String packageName, String className) {
         return className != null && className.length() > 0
@@ -184,8 +185,8 @@ public class JavaImportHelper {
     }
 
     /**
-     * Add a java package to sys.modules, if not already done
-     * 
+     * Add a java package to sys.modules, if not already done.
+     *
      * @return <code>true</code> if something was really added, <code>false</code> otherwise
      */
     private static boolean addPackage(String packageName, boolean packageAdded) {
@@ -216,5 +217,4 @@ public class JavaImportHelper {
         }
         return packageAdded;
     }
-
 }

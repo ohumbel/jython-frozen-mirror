@@ -22,12 +22,12 @@ import org.python.core.PyException;
  * {@link #getNIOByteBufferImpl()} for <code>ByteBuffer</code>s that wrap the storage, and a factory
  * for slices {@link #getBufferSlice(int, int, int, int)}.
  * <p>
- * The sub-class constructor must specify the feature flags (see {@link #BaseBuffer(int)}), set
- * {@link #index0}, {@link #shape} and {@link #strides}, and finally check the client capabilities
- * with {@link #checkRequestFlags(int)}. Sub-classes intended to represent slices of exporters that
- * must count their exports as part of a locking protocol, as does <code>bytearray</code>, must
- * override {@link #getRoot()} so that a buffer view {@link #release()} on a slice, propagates to
- * the buffer view that provided it.
+ * The sub-class constructor must specify the feature flags (see
+ * {@link #BaseBuffer(int, int, int[], int[])}), set {@link #index0}, {@link #shape} and
+ * {@link #strides}, and finally check the client capabilities with {@link #checkRequestFlags(int)}.
+ * A sub-class intended to represent slices of an exporter that counts its exports, as part of a
+ * locking protocol like <code>bytearray</code>'s, must override {@link #getRoot()} so that a call
+ * to {@link #release()} on a view of slice, propagates to the buffer view that provided the slice.
  * <p>
  * Access methods provided here necessarily work with the abstracted {@link #byteAtImpl(int)},
  * {@link #storeAtImpl(byte, int)} interface, but subclasses are able to override them with more
@@ -182,7 +182,7 @@ public abstract class BaseBuffer implements PyBuffer {
     /**
      * Remove features from this buffer expressed using the constants defined in {@link PyBUF},
      * clearing individual flags specified while leaving others already set. Equivalent to
-     * <code>setFeatureFlags(~flags & getFeatureFlags())</code>.
+     * {@code setFeatureFlags(~flags & getFeatureFlags())}.
      *
      * @param flags to clear within the feature flags
      */
@@ -211,7 +211,7 @@ public abstract class BaseBuffer implements PyBuffer {
      * corresponding to an array that the buffer deems necessary.
      *
      * @param flags capabilities of and navigation assumed by the consumer
-     * @throws PyException (BufferError) when expectations do not correspond with the buffer
+     * @throws PyException {@code BufferError} when expectations do not correspond with the buffer
      */
     protected void checkRequestFlags(int flags) throws PyException {
         /*
@@ -291,7 +291,7 @@ public abstract class BaseBuffer implements PyBuffer {
      *
      * @param value to store
      * @param byteIndex byte-index of location to retrieve
-     * @throws PyException(BufferError) if this object is read-only.
+     * @throws PyException {@code BufferError} if this object is read-only.
      */
     abstract protected void storeAtImpl(byte value, int byteIndex)
             throws IndexOutOfBoundsException, PyException;
@@ -820,7 +820,7 @@ public abstract class BaseBuffer implements PyBuffer {
      *
      * @param indices into the buffer (to test)
      * @return number of dimensions
-     * @throws PyException (BufferError) if wrong number of indices
+     * @throws PyException {@code BufferError} if wrong number of indices
      */
     int checkDimension(int[] indices) throws PyException {
         int n = indices.length;
@@ -834,7 +834,7 @@ public abstract class BaseBuffer implements PyBuffer {
      * N-dimensional arrays.
      *
      * @param n number of dimensions being assumed by caller
-     * @throws PyException (BufferError) if wrong number of indices
+     * @throws PyException {@code BufferError} if wrong number of indices
      */
     void checkDimension(int n) throws PyException {
         int ndim = getNdim();
@@ -848,7 +848,7 @@ public abstract class BaseBuffer implements PyBuffer {
     /**
      * Check that the buffer is writable.
      *
-     * @throws PyException (TypeError) if not
+     * @throws PyException {@code TypeError} if not
      */
     protected void checkWritable() throws PyException {
         if (isReadonly()) {
@@ -859,7 +859,7 @@ public abstract class BaseBuffer implements PyBuffer {
     /**
      * Check that the buffer is backed by an array the client can access as byte[].
      *
-     * @throws PyException (BufferError) if not
+     * @throws PyException {@code BufferError} if not
      */
     protected void checkHasArray() throws PyException {
         if (!hasArray()) {

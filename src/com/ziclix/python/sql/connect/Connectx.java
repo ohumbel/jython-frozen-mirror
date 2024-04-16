@@ -58,7 +58,7 @@ public class Connectx extends PyObject {
 
         try {
             String klass = (String) parser.arg(0).__tojava__(String.class);
-            datasource = Class.forName(klass).newInstance();
+            datasource = Class.forName(klass).getDeclaredConstructor().newInstance();
         } catch (Exception e) {
             throw zxJDBC.makeException(zxJDBC.DatabaseError, "unable to instantiate datasource");
         }
@@ -113,11 +113,6 @@ public class Connectx extends PyObject {
         return pc;
     }
 
-    /**
-     * Method toString
-     *
-     * @return String
-     */
     @Override
     public String toString() {
         return String.format("<connectx object at %s>", Py.id(this));
@@ -126,9 +121,9 @@ public class Connectx extends PyObject {
     /**
      * Method invoke
      *
-     * @param Object src
-     * @param String methodName
-     * @param Object value
+     * @param src
+     * @param methodName
+     * @param value
      */
     protected void invoke(Object src, String methodName, Object value) {
         Method method = null;

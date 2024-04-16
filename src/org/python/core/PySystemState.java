@@ -15,7 +15,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.Charset;
 import java.nio.charset.UnsupportedCharsetException;
-import java.security.AccessControlException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -31,6 +30,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,6 +49,9 @@ import com.carrotsearch.sizeof.RamUsageEstimator;
 
 import jnr.posix.util.Platform;
 
+import static org.python.core.RegistryKey.*;
+
+
 /**
  * The "sys" module.
  */
@@ -56,12 +60,9 @@ import jnr.posix.util.Platform;
 public class PySystemState extends PyObject
         implements AutoCloseable, ClassDictInit, Closeable, Traverseproc {
 
-    public static final String PYTHON_CACHEDIR = "python.cachedir";
-    public static final String PYTHON_CACHEDIR_SKIP = "python.cachedir.skip";
-    public static final String PYTHON_CONSOLE_ENCODING = "python.console.encoding";
-    public static final String PYTHON_IO_ENCODING = "python.io.encoding";
-    public static final String PYTHON_IO_ERRORS = "python.io.errors";
-    protected static final String CACHEDIR_DEFAULT_NAME = "cachedir";
+    private static final Logger logger = Logger.getLogger("org.python.core");
+
+    private static final String CACHEDIR_DEFAULT_NAME = ".jython_cache";
 
     public static final String JYTHON_JAR = "jython.jar";
     public static final String JYTHON_DEV_JAR = "jython-dev.jar";
@@ -94,10 +95,8 @@ public class PySystemState extends PyObject
 
     public final static PyTuple _mercurial = new PyTuple(Py.newString("Jython"),
             Py.newString(Version.getHGIdentifier()), Py.newString(Version.getHGVersion()));
-    /**
-     * The copyright notice for this release.
-     */
 
+    /** The copyright notice for this release. */
     public static final PyObject copyright =
             Py.newString("Copyright (c) 2000-2017 Jython Developers.\n" + "All rights reserved.\n\n"
                     + "Copyright (c) 2000 BeOpen.com.\n" + "All Rights Reserved.\n\n"
@@ -133,7 +132,7 @@ public class PySystemState extends PyObject
      * contain bytes in the file system encoding for consistency with use in the standard library
      * (see <code>sysconfig.py</code>).
      */
-    public static PyObject exec_prefix = Py.EmptyString;
+    public static PyObject exec_prefix;
 
     public static final PyString byteorder = new PyString("big");
     public static final int maxint = Integer.MAX_VALUE;
@@ -188,9 +187,6 @@ public class PySystemState extends PyObject
 
     private codecs.CodecState codecState;
 
-    /** true when a SystemRestart is triggered. */
-    public boolean _systemRestart = false;
-
     /** Whether bytecode should be written to disk on import. */
     public boolean dont_write_bytecode = false;
 
@@ -233,7 +229,7 @@ public class PySystemState extends PyObject
         currentWorkingDir = new File("").getAbsolutePath();
 
         dont_write_bytecode = Options.dont_write_bytecode;
-        py3kwarning = Options.py3k_warning;
+        py3kwarning = Options.py3k_warning; // XXX why here if static?
         // Set up the initial standard ins and outs
         String mode = Options.unbuffered ? "b" : "";
         int buffering = Options.unbuffered ? 0 : 1;
@@ -254,6 +250,7 @@ public class PySystemState extends PyObject
         __dict__.__setitem__("displayhook", __displayhook__);
         __dict__.__setitem__("excepthook", __excepthook__);
 
+        logger.config("sys module instance created");
     }
 
     public static void classDictInit(PyObject dict) {
@@ -746,6 +743,15 @@ public class PySystemState extends PyObject
         this.classLoader = classLoader;
     }
 
+    /**
+     * Work out the root directory of the installation of Jython. Sources for this information are
+     * quite diverse. {@code python.home} will take precedence if set in either
+     * {@code postProperties} or {@code preProperties}, {@code install.root} in
+     * {@code preProperties}, in that order. After this, we search the class path for a JAR, or
+     * nagigate from the JAR deduced by from the class path, or finally {@code jarFileName}.
+     * <p>
+     * We also set by side-effect: {@link #defaultPlatform} from {@code java.version}.
+     */
     private static String findRoot(Properties preProperties, Properties postProperties,
             String jarFileName) {
         String root = null;
@@ -793,6 +799,7 @@ public class PySystemState extends PyObject
         }
     }
 
+    /** Set {@link #defaultPlatform} by examination of the {@code java.version} JVM property. */
     private static void determinePlatform(Properties props) {
         String version = props.getProperty("java.version");
         if (version == null) {
@@ -815,6 +822,7 @@ public class PySystemState extends PyObject
      * Emulates CPython's way to name sys.platform. Works according to this table:
      *
      * <table>
+     * <caption>Platform names</caption>
      * <tr>
      * <th style="text-align:left">System</th>
      * <th style="text-align:left">Value</th>
@@ -869,45 +877,91 @@ public class PySystemState extends PyObject
         }
     }
 
+    /**
+     * Install the first argument as the application-wide {@link #registry} (a
+     * {@code java.util.Properties} object), merge values from system and local (or user) properties
+     * files, and finally allow values from {@code postProperties} to override. Usually the first
+     * argument is the {@code System.getProperties()}, if were allowed to access it, and therefore
+     * represents definitions made on the command-line. The net precedence order is:
+     * <table>
+     * <caption>Precedence order of registry sources</caption>
+     * <tr>
+     * <th>Source</th>
+     * <th>Filled by</th>
+     * </tr>
+     * <tr>
+     * <td>postProperties</td>
+     * <td>Custom {@link JythonInitializer}</td>
+     * </tr>
+     * <tr>
+     * <td>preProperties</td>
+     * <td>Command-line definitions {@code -Dkey=value})</td>
+     * </tr>
+     * <tr>
+     * <td>... preProperties also contains ...</td>
+     * <td>Environment variables via {@link org.python.util.jython}</td>
+     * </tr>
+     * <tr>
+     * <td>[user.home]/.jython</td>
+     * <td>User-specific registry file</td>
+     * </tr>
+     * <tr>
+     * <td>[python.home]/registry</td>
+     * <td>Installation-wide registry file</td>
+     * </tr>
+     * <tr>
+     * <td>Environmental inference</td>
+     * <td>e.g. {@code locale} command for console encoding</td>
+     * </tr>
+     * </table>
+     * <p>
+     * We call {@link Options#setFromRegistry()} to translate certain final values to
+     * application-wide controls. By side-effect, set {@link #prefix} and {@link #exec_prefix} from
+     * {@link #findRoot(Properties, Properties, String)}. If it has not been set otherwise, a
+     * default value for python.console.encoding is derived from the OS environment, via
+     * {@link #getConsoleEncoding(Properties)}.
+     *
+     * @param preProperties initial registry
+     * @param postProperties overriding values
+     * @param standalone default {@code python.cachedir.skip} to true (if not otherwise defined)
+     * @param jarFileName as a clue to the location of the installation
+     */
     private static void initRegistry(Properties preProperties, Properties postProperties,
             boolean standalone, String jarFileName) {
         if (registry != null) {
             Py.writeError("systemState", "trying to reinitialize registry");
             return;
         }
-
         registry = preProperties;
+
+        // Work out sys.prefix
         String prefix = findRoot(preProperties, postProperties, jarFileName);
+
+        if (prefix == null || prefix.length() == 0) {
+            /*
+             * All strategies in find_root failed (can happen in embedded use), but sys.prefix is
+             * generally assumed not to be null (or even None). Go for current directory.
+             */
+            prefix = ".";
+            logger.config("No property 'jython.home' or other clue. sys.prefix defaulting to ''.");
+        }
+
+        // sys.exec_prefix is the same initially
         String exec_prefix = prefix;
 
         // Load the default registry
-        if (prefix != null) {
-            if (prefix.length() == 0) {
-                prefix = exec_prefix = ".";
-            }
-            try {
-                // user registry has precedence over installed registry
-                File homeFile = new File(registry.getProperty("user.home"), ".jython");
-                addRegistryFile(homeFile);
-                addRegistryFile(new File(prefix, "registry"));
-            } catch (Exception exc) {
-                // Continue
-            }
-        }
-        if (prefix != null) {
-            PySystemState.prefix = Py.fileSystemEncode(prefix);
-        }
-        if (exec_prefix != null) {
-            PySystemState.exec_prefix = Py.fileSystemEncode(exec_prefix);
-        }
         try {
-            String jythonpath = System.getenv("JYTHONPATH");
-            if (jythonpath != null) {
-                registry.setProperty("python.path", jythonpath);
-            }
-        } catch (SecurityException e) {
-            // Continue
+            // user registry has precedence over installed registry
+            File homeFile = new File(registry.getProperty(USER_HOME), ".jython");
+            addRegistryFile(homeFile);
+            addRegistryFile(new File(prefix, "registry"));
+        } catch (Exception exc) {
+            // Continue: addRegistryFile does its own logging.
         }
+
+        // Exposed values have to be properly-encoded objects
+        PySystemState.prefix = Py.fileSystemEncode(prefix);
+        PySystemState.exec_prefix = Py.fileSystemEncode(exec_prefix);
 
         // Now the post properties (possibly set by custom JythonInitializer).
         registry.putAll(postProperties);
@@ -924,7 +978,7 @@ public class PySystemState extends PyObject
          * python.io.encoding is dubious.
          */
         if (!registry.containsKey(PYTHON_CONSOLE_ENCODING)) {
-                registry.put(PYTHON_CONSOLE_ENCODING, getConsoleEncoding());
+            registry.put(PYTHON_CONSOLE_ENCODING, getConsoleEncoding(registry));
         }
 
         // Set up options from registry
@@ -935,19 +989,21 @@ public class PySystemState extends PyObject
      * Try to determine the console encoding from the platform, if necessary using a sub-process to
      * enquire. If everything fails, assume UTF-8.
      *
+     * @param props in which to look for clues (normally the Jython registry)
      * @return the console encoding (and never {@code null})
      */
-    private static String getConsoleEncoding() {
+    private static String getConsoleEncoding(Properties props) {
 
         // From Java 8 onwards, the answer may already be to hand in the registry:
-        String encoding = System.getProperty("sun.stdout.encoding");
+        String encoding = props.getProperty("sun.stdout.encoding");
+        String os = props.getProperty("os.name");
 
         if (encoding != null) {
             return encoding;
 
-        } else if (System.getProperty("os.name").startsWith("Windows")) {
+        } else if (os != null && os.startsWith("Windows")) {
             // Go via the Windows code page built-in command "chcp".
-            String output = getCommandResult("cmd", "/c", "chcp");
+            String output = Py.getCommandResult("cmd", "/c", "chcp");
             /*
              * The output will be like "Active code page: 850" or maybe "Aktive Codepage: 1252." or
              * "활성 코드 페이지: 949". Assume the first number with 2 or more digits is the code page.
@@ -960,7 +1016,7 @@ public class PySystemState extends PyObject
 
         } else {
             // Try a Unix-like "locale charmap".
-            String output = getCommandResult("locale", "charmap");
+            String output = Py.getCommandResult("locale", "charmap");
             // The result of "locale charmap" is just the charmap name ~ Charset or codec name.
             if (output.length() > 0) {
                 return output;
@@ -972,8 +1028,8 @@ public class PySystemState extends PyObject
     }
 
     /**
-     * Merge the contents of a property file into the registry without overriding any values already
-     * set there.
+     * Merge the contents of a property file into the registry, but existing entries with the same
+     * key take precedence.
      *
      * @param file
      */
@@ -1006,11 +1062,8 @@ public class PySystemState extends PyObject
     }
 
     public static Properties getBaseProperties() {
-        try {
-            return System.getProperties();
-        } catch (AccessControlException ace) {
-            return new Properties();
-        }
+        // Moved to PrePy since does not depend on PyObject). Retain in 2.7.x for compatibility.
+        return PrePy.getSystemProperties();
     }
 
     public static synchronized void initialize() {
@@ -1038,7 +1091,7 @@ public class PySystemState extends PyObject
             return;
         }
         if (preProperties == null) {
-            preProperties = getBaseProperties();
+            preProperties = PrePy.getSystemProperties();
         }
         if (postProperties == null) {
             postProperties = new Properties();
@@ -1115,8 +1168,8 @@ public class PySystemState extends PyObject
             return false;
         }
         try {
-            ((JythonInitializer) initializer.newInstance()).initialize(pre, post, argv,
-                    sysClassLoader, adapter);
+            ((JythonInitializer) initializer.getDeclaredConstructor().newInstance()).initialize(pre,
+                    post, argv, sysClassLoader, adapter);
         } catch (Exception e) {
             Py.writeWarning("initializer",
                     "Failed initializing with class '" + className + "', continuing");
@@ -1139,7 +1192,7 @@ public class PySystemState extends PyObject
         initialized = true;
         Py.setAdapter(adapter);
         boolean standalone = false;
-        String jarFileName = Py._getJarFileName();
+        String jarFileName = Py.getJarFileName();
         if (jarFileName != null) {
             standalone = isStandalone(jarFileName);
         }
@@ -1162,12 +1215,16 @@ public class PySystemState extends PyObject
         // Condition the console
         initConsole(registry);
 
-        // Finish up standard Python initialization...
+        /*
+         * Create the first interpreter (which is also the first instance of the sys module) and
+         * cache it as the default state.
+         */
         Py.defaultSystemState = new PySystemState();
         Py.setSystemState(Py.defaultSystemState);
         if (classLoader != null) {
             Py.defaultSystemState.setClassLoader(classLoader);
         }
+
         Py.initClassExceptions(getDefaultBuiltins());
 
         // Make sure that Exception classes have been loaded
@@ -1189,8 +1246,6 @@ public class PySystemState extends PyObject
             s = "candidate";
         } else if (Version.PY_RELEASE_LEVEL == 0x0F) {
             s = "final";
-        } else if (Version.PY_RELEASE_LEVEL == 0xAA) {
-            s = "snapshot";
         } else {
             throw new RuntimeException(
                     "Illegal value for PY_RELEASE_LEVEL: " + Version.PY_RELEASE_LEVEL);
@@ -1215,9 +1270,11 @@ public class PySystemState extends PyObject
         }
         cachedir = new File(props.getProperty(PYTHON_CACHEDIR, CACHEDIR_DEFAULT_NAME));
         if (!cachedir.isAbsolute()) {
-            String prefixString = prefix == null ? null : Py.fileSystemDecode(prefix);
+            String prefixString = props.getProperty("user.dir", "");
             cachedir = new File(prefixString, cachedir.getPath());
+            cachedir = cachedir.getAbsoluteFile();
         }
+        logger.log(Level.CONFIG, "cache at {0}", cachedir);
     }
 
     private static void initPackages(Properties props) {
@@ -1258,13 +1315,9 @@ public class PySystemState extends PyObject
             // The executable from the registry is a Unicode String path
             executableFile = new File(executable);
         } else {
-            if (prefix == null) {
-                return Py.None;
-            } else {
-                // The prefix is a unicode or encoded bytes object
-                executableFile = new File(Py.fileSystemDecode(prefix),
-                        Platform.IS_WINDOWS ? "bin\\jython.exe" : "bin/jython");
-            }
+            // The prefix is a unicode or encoded bytes object
+            executableFile = new File(Py.fileSystemDecode(prefix),
+                    Platform.IS_WINDOWS ? "bin\\jython.exe" : "bin/jython");
         }
 
         try {
@@ -1285,12 +1338,14 @@ public class PySystemState extends PyObject
      * object may be accessed via {@link Py#getConsole()}.
      *
      * @param props containing (or not) <code>python.console</code>
+     *
+     * @see org.python.core.RegistryKey#PYTHON_CONSOLE
      */
     private static void initConsole(Properties props) {
         // At this stage python.console.encoding is always defined (but null=default)
         String encoding = props.getProperty(PYTHON_CONSOLE_ENCODING);
         // The console type is chosen by this registry entry:
-        String consoleName = props.getProperty("python.console", "").trim();
+        String consoleName = props.getProperty(PYTHON_CONSOLE, "").trim();
         // And must be of type ...
         final Class<Console> consoleType = Console.class;
 
@@ -1391,7 +1446,7 @@ public class PySystemState extends PyObject
         }
 
         // add builtins specified in the registry file
-        String builtinprop = props.getProperty("python.modules.builtin", "");
+        String builtinprop = props.getProperty(PYTHON_MODULES_BUILTIN, "");
         StringTokenizer tok = new StringTokenizer(builtinprop, ",");
         while (tok.hasMoreTokens()) {
             addBuiltin(tok.nextToken());
@@ -1412,16 +1467,13 @@ public class PySystemState extends PyObject
 
     private static PyList initPath(Properties props, boolean standalone, String jarFileName) {
         PyList path = new PyList();
-        addPaths(path, props.getProperty("python.path", ""));
-        if (prefix != null) {
-            String libpath = new File(Py.fileSystemDecode(prefix), "Lib").toString();
-            path.append(Py.fileSystemEncode(libpath)); // XXX or newUnicode?
-        }
+        addPaths(path, props.getProperty(PYTHON_PATH, ""));
+        String libpath = new File(Py.fileSystemDecode(prefix), "Lib").toString();
+        path.append(Py.fileSystemEncode(libpath)); // XXX or newUnicode?
         if (standalone) {
             // standalone jython: add the /Lib directory inside JYTHON_JAR to the path
             addPaths(path, jarFileName + "/Lib");
         }
-
         return path;
     }
 
@@ -1477,16 +1529,17 @@ public class PySystemState extends PyObject
      * <b>Note</b>. Classes found in directory and sub-directory are not made available to jython by
      * this call. It only makes the java package found in the directory available. This call is
      * mostly useful if jython is embedded in an application that deals with its own class loaders.
-     * A servlet container is a very good example. Calling add_classdir("<context>/WEB-INF/classes")
-     * makes the java packages in WEB-INF classes available to jython import. However the actual
-     * classloading is completely handled by the servlet container's context classloader.
+     * A servlet container is a very good example. Calling
+     * {@code add_classdir("<context>/WEB-INF/classes")} makes the java packages in WEB-INF classes
+     * available to jython import. However the actual class loading is completely handled by the
+     * servlet container's context classloader.
      */
     public static void add_classdir(String directoryPath) {
         packageManager.addDirectory(new File(directoryPath));
     }
 
     /**
-     * Add a .jar & .zip directory to the list of places that are searched for java .jar and .zip
+     * Add a .jar and .zip directory to the list of places that are searched for java .jar and .zip
      * files. The .jar and .zip files found will not be cached.
      * <p>
      * <b>Note</b>. Classes in .jar and .zip files found in the directory are not made available to
@@ -1501,7 +1554,7 @@ public class PySystemState extends PyObject
     }
 
     /**
-     * Add a .jar & .zip directory to the list of places that are searched for java .jar and .zip
+     * Add a .jar and .zip directory to the list of places that are searched for java .jar and .zip
      * files.
      * <p>
      * <b>Note</b>. Classes in .jar and .zip files found in the directory are not made available to
@@ -1541,8 +1594,8 @@ public class PySystemState extends PyObject
      * Exit a Python program with the given status.
      *
      * @param status the value to exit with
-     * @exception Py.SystemExit always throws this exception. When caught at top level the program
-     *                will exit.
+     * @throws PyException {@code SystemExit} always throws this exception. When caught at top level
+     *             the program will exit.
      */
     public static void exit(PyObject status) {
         throw new PyException(Py.SystemExit, status);
@@ -1722,58 +1775,34 @@ public class PySystemState extends PyObject
 
     /**
      * Attempt to find the OS version. The mechanism on Windows is to extract it from the result of
-     * <code>cmd.exe /C ver</code>, and otherwise (assumed Unix-like OS) to use
-     * <code>uname -v</code>.
+     * {@code cmd.exe /C ver}, and otherwise (assumed Unix-like OS) to use {@code uname -v</code>}.
      */
     public static String getSystemVersionString() {
         if (System.getProperty("os.name").startsWith("Windows")) {
-            String ver = getCommandResult("cmd.exe", "/c", "ver");
-            int start = ver.toLowerCase().indexOf("version ");
-            if (start != -1) {
-                start += 8;
-                int end = ver.length();
-                if (ver.endsWith("]")) {
-                    --end;
-                }
-                ver = ver.substring(start, end);
-            }
-            return ver;
+            // Windows ver command returns a string similar to:
+            // "Microsoft Windows [Version 10.0.10586]"
+            // "Microsoft Windows XP [Version 5.1.2600]"
+            // "Microsoft Windows [版本 10.0.17134.472]"
+            // We match the dots and digits within square brackets.
+            Pattern p = Pattern.compile("\\[.* ([\\d.]+)\\]");
+            Matcher m = p.matcher(Py.getCommandResult("cmd.exe", "/c", "ver"));
+            return m.find() ? m.group(1) : "";
         } else {
-            return getCommandResult("uname", "-v");
+            return Py.getCommandResult("uname", "-v");
         }
     }
 
     /**
-     * Run a command as a sub-process and return as the result the first line of output that consist
-     * of more than white space. It returns "" on any kind of error.
+     * Run a command as a sub-process and return as the result the first line of output that
+     * consists of more than white space. It returns "" on any kind of error.
      *
      * @param command as strings (as for <code>ProcessBuilder</code>)
      * @return the first line with content, or ""
+     * @deprecated Use {@link Py#getCommandResult(String...)} instead
      */
+    @Deprecated
     private static String getCommandResult(String... command) {
-        String result = "", line = null;
-        ProcessBuilder pb = new ProcessBuilder(command);
-        try {
-            Process p = pb.start();
-            java.io.BufferedReader br =
-                    new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
-            // We read to the end-of-stream in case the sub-process cannot end cleanly without.
-            while ((line = br.readLine()) != null) {
-                if (line.length() > 0 && result.length() == 0) {
-                    // This is the first line with content (maybe).
-                    result = line.trim();
-                }
-            }
-            br.close();
-            // Now we wait for the sub-process to terminate nicely.
-            if (p.waitFor() != 0) {
-                // Bad exit status: don't take the result.
-                result = "";
-            }
-        } catch (IOException | InterruptedException | SecurityException e) {
-            result = "";
-        }
-        return result;
+        return PrePy.getCommandResult(command);
     }
 
     /* Traverseproc implementation */

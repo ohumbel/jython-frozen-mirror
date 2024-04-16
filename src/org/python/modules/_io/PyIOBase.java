@@ -33,7 +33,7 @@ import org.python.expose.ExposedType;
  * <b>Implementation note:</b> The code is based heavily on the Jython 2.6-ish
  * <code>_fileio.PyFileIO</code>, the purely Java-accessible {@link org.python.core.io.IOBase} (both
  * Philip Jenvey's work), and the Python implementation in <code>Lib/_pyio</code>. We do not simply
- * delegate to the implementation in {@link org.python.core.io} because of the need to override
+ * delegate to the implementation in {@code org.python.core.io} because of the need to override
  * parts of the implementation in Python subclasses. A call to {@link #close()}, for example, is
  * required to call {@link #flush()}, but if delegated to the pure Java implementation would not
  * call the version of <code>flush()</code> overridden in a Python sub-class of
@@ -244,7 +244,7 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * Is the stream capable of positioning the read/write pointer?
      *
      * @return <code>True</code> if may be positioned
-     * @throws PyException(ValueError) if the object is closed to client operations
+     * @throws PyException {@code ValueError} if the object is closed to client operations
      */
     public boolean seekable() throws PyException {
         return _IOBase_seekable();
@@ -260,8 +260,8 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * positioned.
      *
      * @param msg optional custom message
-     * @throws PyException(ValueError) if the object is closed to client operations
-     * @throws PyException(IOError) if the stream <b>is not</b> capable of being positioned.
+     * @throws PyException {@code ValueError} if the object is closed to client operations
+     * @throws PyException {@code IOError} if the stream <b>is not</b> capable of being positioned.
      */
     public void _checkSeekable(String msg) {
         _IOBase__checkSeekable(msg);
@@ -271,8 +271,8 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * Raise an error if the pointer of underlying IO stream <b>is not</b> capable of being
      * positioned.
      *
-     * @throws PyException(ValueError) if the object is closed to client operations
-     * @throws PyException(IOError) if the stream <b>is not</b> capable of being positioned.
+     * @throws PyException {@code ValueError} if the object is closed to client operations
+     * @throws PyException {@code IOError} if the stream <b>is not</b> capable of being positioned.
      */
     public final void _checkSeekable() {
         _checkSeekable(null);
@@ -289,7 +289,7 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * Is the stream readable?
      *
      * @return <code>true</code> if readable
-     * @throws PyException(ValueError) if the object is closed to client operations
+     * @throws PyException {@code ValueError} if the object is closed to client operations
      */
     public boolean readable() throws PyException {
         return _IOBase_readable();
@@ -304,8 +304,8 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * Raise an error if the underlying IO stream <b>is not</b> readable.
      *
      * @param msg optional custom message
-     * @throws PyException(ValueError) if the object is closed to client operations
-     * @throws PyException(IOError) if the stream <b>is not</b> readable.
+     * @throws PyException {@code ValueError} if the object is closed to client operations
+     * @throws PyException {@code IOError} if the stream <b>is not</b> readable.
      */
     public void _checkReadable(String msg) {
         _IOBase__checkReadable(msg);
@@ -314,8 +314,8 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
     /**
      * Raise an error if the underlying IO stream <b>is not</b> readable.
      *
-     * @throws PyException(ValueError) if the object is closed to client operations
-     * @throws PyException(IOError) if the stream <b>is not</b> readable.
+     * @throws PyException {@code ValueError} if the object is closed to client operations
+     * @throws PyException {@code IOError} if the stream <b>is not</b> readable.
      */
     public final void _checkReadable() {
         _checkReadable(null);
@@ -332,7 +332,7 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * Is the stream writable?
      *
      * @return <code>true</code> if writable
-     * @throws PyException(ValueError) if the object is closed to client operations
+     * @throws PyException {@code ValueError} if the object is closed to client operations
      */
     public boolean writable() throws PyException {
         return _IOBase_writable();
@@ -347,8 +347,8 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * Raise an error if the underlying IO stream <b>is not</b> writable.
      *
      * @param msg optional custom message
-     * @throws PyException(ValueError) if the object is closed to client operations
-     * @throws PyException(IOError) if the stream <b>is not</b> writable.
+     * @throws PyException {@code ValueError} if the object is closed to client operations
+     * @throws PyException {@code IOError} if the stream <b>is not</b> writable.
      */
     public void _checkWritable(String msg) throws PyException {
         _IOBase__checkWritable(msg);
@@ -357,8 +357,8 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
     /**
      * Raise an error if the underlying IO stream <b>is not</b> writable.
      *
-     * @throws PyException(ValueError) if the object is closed to client operations
-     * @throws PyException(IOError) if the stream <b>is not</b> writable.
+     * @throws PyException {@code ValueError} if the object is closed to client operations
+     * @throws PyException {@code IOError} if the stream <b>is not</b> writable.
      */
     public final void _checkWritable() throws PyException {
         _checkWritable(null);
@@ -385,7 +385,7 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * {@link #_checkSeekable}, etc..
      *
      * @param msg optional custom message
-     * @throws PyException(ValueError) if the object is closed to client operations
+     * @throws PyException {@code ValueError} if the object is closed to client operations
      */
     public void _checkClosed(String msg) throws PyException {
         _IOBase__checkClosed(msg);
@@ -471,7 +471,7 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * Return one line of text (bytes terminates by <code>'\n'</code>), or the specified number of
      * bytes, or the whole stream, whichever is shortest.
      *
-     * @param limit maximum number of bytes (<0 means no limit)
+     * @param limit maximum number of bytes (&lt;0 means no limit)
      * @return the line (or fragment)
      */
     public PyObject readline(int limit) {
@@ -543,9 +543,7 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
                 if (peekResult.__nonzero__()) {
 
                     // Get a look at the bytes themselves
-                    PyBuffer peekBuffer = readablePyBuffer(peekResult);
-
-                    try {
+                    try (PyBuffer peekBuffer = readablePyBuffer(peekResult)) {
                         /*
                          * Scan forwards in the peek buffer to see if there is an end-of-line. Most
                          * frequently this succeeds. The number of bytes to scan is limited to the
@@ -569,10 +567,6 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
                          */
                         curr = readMethod.__call__(Py.newInteger(p));
                         remainingLimit -= p;
-
-                    } finally {
-                        // We must let go of the buffer we were given
-                        peekBuffer.release();
                     }
 
                 } else {
@@ -654,9 +648,9 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      * May be called repeatedly to produce (usually) lines from this stream or file.
      *
      * @return next line from the stream or file
-     * @throws PyException(StopIteration) when iteration has reached a natural conclusion
-     * @throws PyException(ValueError) if the file or stream is closed
-     * @throws PyException(IOError) reflecting an I/O error in during the read
+     * @throws PyException {@code StopIteration} when iteration has reached a natural conclusion
+     * @throws PyException {@code ValueError} if the file or stream is closed
+     * @throws PyException {@code IOError} reflecting an I/O error in during the read
      */
     public PyObject next() throws PyException {
         return _IOBase_next();
@@ -752,13 +746,20 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      *
      * @param obj to be wrapped and presented as a buffer
      * @return a 1D contiguous PyBuffer of bytes
-     * @throws PyException (BufferError) if object has buffer API, but is not 1D contiguous bytes
-     * @throws PyException (TypeError) if object not convertible to a byte array
+     * @throws PyException {@code BufferError} if object has buffer API, but is not 1D contiguous
+     *             bytes
+     * @throws PyException {@code TypeError} if object not convertible to a byte array
      */
     protected static PyBuffer readablePyBuffer(PyObject obj) throws PyException {
-        if (obj instanceof BufferProtocol) {
+
+        // First consider special cases we can view as a String
+        if (obj instanceof PyUnicode) {
+            String s = ((PyUnicode) obj).encode();
+            return new SimpleStringBuffer(PyBUF.SIMPLE, null, s);
+
+        } else {
             try {
-                return ((BufferProtocol)obj).getBuffer(PyBUF.SIMPLE);
+                return ((BufferProtocol) obj).getBuffer(PyBUF.SIMPLE);
             } catch (PyException pye) {
                 if (pye.match(Py.BufferError)) {
                     // If we can't get a buffer on the object, say it's the wrong type
@@ -766,20 +767,13 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
                 } else {
                     throw pye;
                 }
+            } catch (ClassCastException pye) {
+                // fall through to message
             }
-        } else {
-            // Something else we can view as a String?
-            String s;
-            if (obj instanceof PyUnicode) {
-                s = ((PyUnicode)obj).encode();
-            } else if (obj instanceof PyArray) {
-                s = ((PyArray)obj).tostring();
-            } else {
-                // None of the above: complain
-                throw tailoredTypeError("read-write buffer", obj);
-            }
-            return new SimpleStringBuffer(PyBUF.SIMPLE, null, s);
         }
+
+        // None of the above: complain
+        throw tailoredTypeError("read-write buffer", obj);
     }
 
     /**
@@ -788,25 +782,25 @@ public class PyIOBase extends PyObject implements FinalizableBuiltin, Traversepr
      *
      * @param obj to be wrapped and presented as a buffer
      * @return a 1D contiguous PyBuffer of bytes
-     * @throws PyException (BufferError) if object has buffer API, but is not 1D contiguous bytes
-     * @throws PyException (TypeError) if object not convertible to a byte array
+     * @throws PyException {@code BufferError} if object has buffer API, but is not 1D contiguous
+     *             bytes
+     * @throws PyException {@code TypeError} if object not convertible to a byte array
      */
     protected static PyBuffer writablePyBuffer(PyObject obj) throws PyException {
-        if (obj instanceof BufferProtocol) {
-            try {
-                return ((BufferProtocol)obj).getBuffer(PyBUF.WRITABLE);
-            } catch (PyException pye) {
-                if (pye.match(Py.BufferError)) {
-                    // If we can't get a buffer on the object, say it's the wrong type
-                    throw Py.TypeError(String.format("(BufferError) %s", pye.getMessage()));
-                } else {
-                    throw pye;
-                }
+        try {
+            return ((BufferProtocol) obj).getBuffer(PyBUF.WRITABLE);
+        } catch (PyException pye) {
+            if (pye.match(Py.BufferError)) {
+                // If we can't get a buffer on the object, say it's the wrong type
+                throw Py.TypeError(String.format("(BufferError) %s", pye.getMessage()));
+            } else {
+                throw pye;
             }
-        } else {
-            // Can't be a buffer: complain
-            throw tailoredTypeError("read-write buffer", obj);
+        } catch (ClassCastException pye) {
+            // fall through to message
         }
+        // Can't be a buffer: complain
+        throw tailoredTypeError("read-write buffer", obj);
     }
 
     /**

@@ -82,6 +82,11 @@ class large_module_tests(unittest.TestCase):
     def test_large_module_small_func(self):
         self.assertEqual(large_module.small_function(), 'small 10')
 
-if __name__ == "__main__":
-    unittest.main()
+def test_main():
+    test_support.run_unittest(
+        large_method_tests,
+        large_module_tests
+    )
 
+if __name__ == "__main__":
+    test_main()

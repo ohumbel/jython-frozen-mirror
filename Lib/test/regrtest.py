@@ -378,7 +378,6 @@ def main(tests=None, testdir=None, verbose=0, quiet=False,
     test_times = []
     test_support.verbose = verbose      # Tell tests to be moderately quiet
     test_support.use_resources = use_resources
-    test_support.junit_xml_dir = junit_xml
     save_modules = sys.modules.keys()
 
     skips = _ExpectedSkips()
@@ -600,6 +599,7 @@ def runtest_inner(test, verbose, quiet, test_times,
             save_stderr = sys.stderr
             sys.stdout = stdout = Tee(sys.stdout)
             sys.stderr = stderr = Tee(sys.stderr)
+            test_support.junit_xml_dir = junit_xml_dir
         try:
             if capture_stdout:
                 sys.stdout = capture_stdout
@@ -630,6 +630,7 @@ def runtest_inner(test, verbose, quiet, test_times,
             test_times.append((test_time, test))
         finally:
             sys.stdout = save_stdout
+            test_support.junit_xml_dir = None
             if junit_xml_dir:
                 sys.stderr = save_stderr
                 test_time = time.time() - start_time
@@ -1322,6 +1323,7 @@ _failures = {
         test_peepholer
         test_pyclbr
         test_pyexpat
+        test_ssl        # overridden by test_ssl_jy
         test_stringprep # UnicodeDecodeError
         test_threadsignals
         test_transformer
@@ -1369,11 +1371,15 @@ _failures = {
 
     'java.nt':     # Expected to fail on Windows
         """
-        test_mailbox           # fails miserably and ruins other tests
-        # test_os_jy             # Locale tests fail on Cygwin (but not Windows)
-        # test_popen             # Passes, but see http://bugs.python.org/issue1559298
-        test_select_new        # Hangs (Windows), though ok run singly
-        test_urllib2           # file not on local host (likely Windows only)
+        test_calendar           # Same, covered by test_calendar_jy
+        test_email              # test_email_jy overrides for correct locale handling
+        test_mailbox            # fails miserably and ruins other tests
+        # test_popen            # Passes, but see http://bugs.python.org/issue1559298
+        test_select_new         # Hangs (Windows), though ok run singly
+        test_strptime           # Fails on JDK 9+ due to locale strings change
+                                # Covered by test_strptime_jy until the beta locale 
+                                # behaviour becomes the default
+        test_urllib2            # file not on local host (likely Windows only)
         """,
 
     'java.posix':   # Expected to fail on Linux

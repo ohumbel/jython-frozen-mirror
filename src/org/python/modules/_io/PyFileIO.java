@@ -250,16 +250,11 @@ public class PyFileIO extends PyRawIOBase {
 
         } else {
             // Perform the operation through a buffer view on the object
-            PyBuffer pybuf = writablePyBuffer(buf);
-
-            try {
+            try (PyBuffer pybuf = writablePyBuffer(buf)) {
                 ByteBuffer byteBuffer = pybuf.getNIOByteBuffer();
                 synchronized (ioDelegate) {
                     count = ioDelegate.readinto(byteBuffer);
                 }
-            } finally {
-                // Must unlock the PyBuffer view from client's object
-                pybuf.release();
             }
         }
 
@@ -290,17 +285,12 @@ public class PyFileIO extends PyRawIOBase {
 
         } else {
             // Get or synthesise a buffer API on the object to be written
-            PyBuffer pybuf = readablePyBuffer(buf);
-
-            try {
+            try (PyBuffer pybuf = readablePyBuffer(buf)) {
                 // Access the data as a java.nio.ByteBuffer [pos:limit] within possibly larger array
                 ByteBuffer byteBuffer = pybuf.getNIOByteBuffer();
                 synchronized (ioDelegate) {
                     count = ioDelegate.write(byteBuffer);
                 }
-            } finally {
-                // Even if that went badly, we should release the lock on the client buffer
-                pybuf.release();
             }
         }
 
@@ -370,15 +360,18 @@ public class PyFileIO extends PyRawIOBase {
 
     @ExposedMethod
     final synchronized void FileIO_close() {
-        // Close this object to further input (also calls flush)
-        super.close();
-        // Now close downstream (if required to)
-        if (closefd) {
-            ioDelegate.close();
+        try {
+            // Close this object to further input (also calls flush)
+            super.close();
+        } finally {
+            // Now close downstream (if required to)
+            if (closefd) {
+                ioDelegate.close();
+            }
+            // This saves us doing two tests for each action (when the file is open)
+            readable = false;
+            writable = false;
         }
-        // This saves us doing two tests for each action (when the file is open)
-        readable = false;
-        writable = false;
     }
 
     @Override
